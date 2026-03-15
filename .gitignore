@@ -1,0 +1,14 @@
+# Node
+node_modules
+dist
+
+# Go
+bin
+*.exe
+
+# Env
+.env
+
+# IDE
+.vscode
+.idea
