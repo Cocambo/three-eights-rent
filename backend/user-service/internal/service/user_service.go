@@ -1,13 +1,394 @@
 package service
 
-import "user-service/internal/repository"
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/mail"
+	"strings"
+	"time"
 
-type UserService struct {
-	userRepository *repository.UserRepository
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+
+	"user-service/internal/domains"
+	"user-service/internal/dto"
+	apperrors "user-service/internal/errors"
+	"user-service/internal/repository"
+)
+
+const (
+	minPasswordLength = 8
+	defaultBcryptCost = bcrypt.DefaultCost
+	birthDateLayout   = "2006-01-02"
+)
+
+type UserServiceConfig struct {
+	AccessSecret  string
+	RefreshSecret string
+	AccessTTL     time.Duration
+	RefreshTTL    time.Duration
+	BcryptCost    int
 }
 
-func NewUserService(userRepository *repository.UserRepository) *UserService {
+type UserService struct {
+	userRepository repository.UserRepository
+	accessSecret   []byte
+	refreshSecret  []byte
+	accessTTL      time.Duration
+	refreshTTL     time.Duration
+	bcryptCost     int
+	now            func() time.Time
+}
+
+type tokenClaims struct {
+	TokenType string `json:"token_type"`
+	jwt.RegisteredClaims
+}
+
+func NewUserService(userRepository repository.UserRepository, cfg UserServiceConfig) *UserService {
+	bcryptCost := cfg.BcryptCost
+	if bcryptCost == 0 {
+		bcryptCost = defaultBcryptCost
+	}
+	if cfg.AccessTTL <= 0 {
+		cfg.AccessTTL = 15 * time.Minute
+	}
+	if cfg.RefreshTTL <= 0 {
+		cfg.RefreshTTL = 7 * 24 * time.Hour
+	}
+
 	return &UserService{
 		userRepository: userRepository,
+		accessSecret:   []byte(cfg.AccessSecret),
+		refreshSecret:  []byte(cfg.RefreshSecret),
+		accessTTL:      cfg.AccessTTL,
+		refreshTTL:     cfg.RefreshTTL,
+		bcryptCost:     bcryptCost,
+		now:            time.Now,
+	}
+}
+
+func (s *UserService) Register(ctx context.Context, req dto.RegisterRequest) (*dto.AuthResponse, error) {
+	email, err := normalizeAndValidateEmail(req.Email)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePassword(req.Password); err != nil {
+		return nil, err
+	}
+
+	birthDate, err := parseBirthDate(req.BirthDate)
+	if err != nil {
+		return nil, err
+	}
+	firstName, err := validateName(req.FirstName, "first_name")
+	if err != nil {
+		return nil, err
+	}
+	lastName, err := validateName(req.LastName, "last_name")
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := s.userRepository.GetUserByEmail(ctx, email); err == nil {
+		return nil, apperrors.ErrDuplicateEmail
+	} else if !errors.Is(err, apperrors.ErrNotFound) {
+		return nil, err
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), s.bcryptCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	user := &domains.User{
+		Email:        email,
+		PasswordHash: string(passwordHash),
+		Profile: domains.UserProfile{
+			FirstName: firstName,
+			LastName:  lastName,
+			BirthDate: birthDate,
+		},
+	}
+
+	if err := s.userRepository.CreateUser(ctx, user); err != nil {
+		return nil, err
+	}
+
+	tokenPair, err := s.issueAndPersistTokens(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.AuthResponse{
+		User:   toUserResponse(user),
+		Tokens: *tokenPair,
+	}, nil
+}
+
+func (s *UserService) Login(ctx context.Context, req dto.LoginRequest) (*dto.AuthResponse, error) {
+	email, err := normalizeAndValidateEmail(req.Email)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(req.Password) == "" {
+		return nil, validationError("password is required")
+	}
+
+	user, err := s.userRepository.GetUserByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			return nil, apperrors.ErrInvalidCredentials
+		}
+		return nil, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		return nil, apperrors.ErrInvalidCredentials
+	}
+
+	tokenPair, err := s.issueAndPersistTokens(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.AuthResponse{
+		User:   toUserResponse(user),
+		Tokens: *tokenPair,
+	}, nil
+}
+
+func (s *UserService) Refresh(ctx context.Context, refreshToken string) (*dto.TokenPairResponse, error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, validationError("refresh token is required")
+	}
+
+	claims, err := s.parseToken(refreshToken, s.refreshSecret, "refresh")
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.userRepository.GetUserByRefreshToken(ctx, refreshToken)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			return nil, apperrors.ErrInvalidToken
+		}
+		return nil, err
+	}
+
+	if user.RefreshTokenExpiresAt == nil || user.RefreshTokenExpiresAt.Before(s.now()) {
+		return nil, apperrors.ErrUnauthorized
+	}
+	if claims.Subject != fmt.Sprintf("%d", user.ID) {
+		return nil, apperrors.ErrInvalidToken
+	}
+
+	tokenPair, err := s.issueAndPersistTokens(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.userRepository.DeleteRefreshToken(ctx, refreshToken); err != nil {
+		return nil, err
+	}
+
+	return tokenPair, nil
+}
+
+func (s *UserService) Logout(ctx context.Context, refreshToken string) error {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return validationError("refresh token is required")
+	}
+
+	if _, err := s.parseToken(refreshToken, s.refreshSecret, "refresh"); err != nil {
+		return err
+	}
+
+	return s.userRepository.DeleteRefreshToken(ctx, refreshToken)
+}
+
+func (s *UserService) GetProfile(ctx context.Context, userID uint) (*dto.ProfileResponse, error) {
+	if userID == 0 {
+		return nil, validationError("user_id must be greater than zero")
+	}
+
+	profile, err := s.userRepository.GetProfile(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return toProfileResponse(profile), nil
+}
+
+func (s *UserService) UpdateProfile(ctx context.Context, userID uint, req dto.UpdateProfileRequest) (*dto.ProfileResponse, error) {
+	if userID == 0 {
+		return nil, validationError("user_id must be greater than zero")
+	}
+
+	birthDate, err := parseBirthDate(req.BirthDate)
+	if err != nil {
+		return nil, err
+	}
+	firstName, err := validateName(req.FirstName, "first_name")
+	if err != nil {
+		return nil, err
+	}
+	lastName, err := validateName(req.LastName, "last_name")
+	if err != nil {
+		return nil, err
+	}
+
+	profile, err := s.userRepository.GetProfile(ctx, userID)
+	if err != nil {
+		if !errors.Is(err, apperrors.ErrNotFound) {
+			return nil, err
+		}
+		profile = &domains.UserProfile{UserID: userID}
+	}
+
+	profile.FirstName = firstName
+	profile.LastName = lastName
+	profile.BirthDate = birthDate
+
+	if err := s.userRepository.UpdateProfile(ctx, profile); err != nil {
+		return nil, err
+	}
+
+	return toProfileResponse(profile), nil
+}
+
+func (s *UserService) issueAndPersistTokens(ctx context.Context, userID uint) (*dto.TokenPairResponse, error) {
+	now := s.now()
+	accessToken, err := s.generateToken(userID, "access", now.Add(s.accessTTL), s.accessSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshExpiresAt := now.Add(s.refreshTTL)
+	refreshToken, err := s.generateToken(userID, "refresh", refreshExpiresAt, s.refreshSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.userRepository.SaveRefreshToken(ctx, userID, refreshToken, refreshExpiresAt); err != nil {
+		return nil, err
+	}
+
+	return &dto.TokenPairResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresAt:    refreshExpiresAt,
+	}, nil
+}
+
+func (s *UserService) generateToken(userID uint, tokenType string, expiresAt time.Time, secret []byte) (string, error) {
+	claims := tokenClaims{
+		TokenType: tokenType,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   fmt.Sprintf("%d", userID),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+			IssuedAt:  jwt.NewNumericDate(s.now()),
+			NotBefore: jwt.NewNumericDate(s.now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString(secret)
+	if err != nil {
+		return "", fmt.Errorf("sign %s token: %w", tokenType, err)
+	}
+	return signedToken, nil
+}
+
+func (s *UserService) parseToken(tokenString string, secret []byte, expectedType string) (*tokenClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &tokenClaims{}, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, apperrors.ErrInvalidToken
+		}
+		return secret, nil
+	})
+	if err != nil {
+		return nil, apperrors.ErrInvalidToken
+	}
+
+	claims, ok := token.Claims.(*tokenClaims)
+	if !ok || !token.Valid {
+		return nil, apperrors.ErrInvalidToken
+	}
+	if claims.TokenType != expectedType {
+		return nil, apperrors.ErrInvalidToken
+	}
+	return claims, nil
+}
+
+func normalizeAndValidateEmail(email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return "", validationError("email is required")
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
+		return "", validationError("email format is invalid")
+	}
+	return email, nil
+}
+
+func validatePassword(password string) error {
+	switch {
+	case strings.TrimSpace(password) == "":
+		return validationError("password is required")
+	case len(password) < minPasswordLength:
+		return validationError("password must be at least 8 characters long")
+	default:
+		return nil
+	}
+}
+
+func validateName(value string, field string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", validationError(field + " is required")
+	}
+	if len([]rune(value)) > 100 {
+		return "", validationError(field + " must be at most 100 characters")
+	}
+	return value, nil
+}
+
+func parseBirthDate(value string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, validationError("birth_date is required")
+	}
+
+	birthDate, err := time.Parse(birthDateLayout, value)
+	if err != nil {
+		return time.Time{}, validationError("birth_date must match YYYY-MM-DD")
+	}
+	if birthDate.After(time.Now()) {
+		return time.Time{}, validationError("birth_date cannot be in the future")
+	}
+	return birthDate, nil
+}
+
+func validationError(message string) error {
+	return fmt.Errorf("%w: %s", apperrors.ErrValidation, message)
+}
+
+func toUserResponse(user *domains.User) dto.UserResponse {
+	return dto.UserResponse{
+		ID:    user.ID,
+		Email: user.Email,
+	}
+}
+
+func toProfileResponse(profile *domains.UserProfile) *dto.ProfileResponse {
+	return &dto.ProfileResponse{
+		UserID:    profile.UserID,
+		FirstName: profile.FirstName,
+		LastName:  profile.LastName,
+		BirthDate: profile.BirthDate,
 	}
 }

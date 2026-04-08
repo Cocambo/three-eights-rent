@@ -25,7 +25,12 @@ func main() {
 
 	// Manual dependency injection.
 	userRepository := repository.NewUserRepository(db)
-	userService := service.NewUserService(userRepository)
+	userService := service.NewUserService(userRepository, service.UserServiceConfig{
+		AccessSecret:  cfg.JWTAccessSecret,
+		RefreshSecret: cfg.JWTRefreshSecret,
+		AccessTTL:     cfg.JWTAccessTTL,
+		RefreshTTL:    cfg.JWTRefreshTTL,
+	})
 	userHandler := handler.NewUserHandler(userService)
 
 	router := gin.New()

@@ -3,10 +3,14 @@ package domains
 import "time"
 
 type User struct {
-	ID        uint      `gorm:"primaryKey"`
-	Email     string    `gorm:"type:varchar(255);not null;uniqueIndex:idx_users_email"`
-	CreatedAt time.Time `gorm:"not null"`
-	UpdatedAt time.Time `gorm:"not null"`
+	ID           uint      `gorm:"primaryKey"`
+	Email        string    `gorm:"type:varchar(255);not null;uniqueIndex:idx_users_email"`
+	PasswordHash string    `gorm:"column:password_hash;type:varchar(255);not null"`
+	CreatedAt    time.Time `gorm:"not null"`
+	UpdatedAt    time.Time `gorm:"not null"`
+
+	RefreshToken          *string    `gorm:"type:varchar(512);index:idx_users_refresh_token"`
+	RefreshTokenExpiresAt *time.Time `gorm:""`
 
 	Profile       UserProfile   `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:UserID;references:ID"`
 	DriverLicense DriverLicense `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;foreignKey:UserID;references:ID"`
