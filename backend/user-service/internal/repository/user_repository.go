@@ -22,6 +22,8 @@ type UserRepository interface {
 	DeleteRefreshToken(ctx context.Context, refreshToken string) error
 	GetProfile(ctx context.Context, userID uint) (*domains.UserProfile, error)
 	UpdateProfile(ctx context.Context, profile *domains.UserProfile) error
+	CreateDriverLicense(ctx context.Context, license *domains.DriverLicense) error
+	GetDriverLicense(ctx context.Context, userID uint) (*domains.DriverLicense, error)
 }
 
 type gormUserRepository struct {
@@ -105,6 +107,25 @@ func (r *gormUserRepository) UpdateProfile(ctx context.Context, profile *domains
 		return mapDBError(err)
 	}
 	return nil
+}
+
+func (r *gormUserRepository) CreateDriverLicense(ctx context.Context, license *domains.DriverLicense) error {
+	if err := r.db.WithContext(ctx).Create(license).Error; err != nil {
+		return mapDBError(err)
+	}
+	return nil
+}
+
+func (r *gormUserRepository) GetDriverLicense(ctx context.Context, userID uint) (*domains.DriverLicense, error) {
+	var license domains.DriverLicense
+	err := r.db.WithContext(ctx).
+		Preload("Categories").
+		Where("user_id = ?", userID).
+		First(&license).Error
+	if err != nil {
+		return nil, mapDBError(err)
+	}
+	return &license, nil
 }
 
 func mapDBError(err error) error {

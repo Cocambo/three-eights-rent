@@ -38,13 +38,13 @@ type DriverLicense struct {
 }
 
 type DriverLicenseCategory struct {
-	ID              uint      `gorm:"primaryKey"`
-	DriverLicenseID uint      `gorm:"not null;index:idx_driver_license_categories_driver_license_id"`
-	CategoryCode    string    `gorm:"type:varchar(10);not null"`
-	IssuedAt        time.Time `gorm:"type:date"`
-	ExpiresAt       time.Time `gorm:"type:date"`
-	CreatedAt       time.Time `gorm:"not null"`
-	UpdatedAt       time.Time `gorm:"not null"`
+	ID              uint       `gorm:"primaryKey"`
+	DriverLicenseID uint       `gorm:"not null;index:idx_driver_license_categories_driver_license_id"`
+	CategoryCode    string     `gorm:"type:varchar(10);not null"`
+	IssuedAt        *time.Time `gorm:"type:date"`
+	ExpiresAt       *time.Time `gorm:"type:date"`
+	CreatedAt       time.Time  `gorm:"not null"`
+	UpdatedAt       time.Time  `gorm:"not null"`
 }
 
 func (User) TableName() string {

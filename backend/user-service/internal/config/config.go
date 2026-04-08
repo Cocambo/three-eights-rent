@@ -39,11 +39,11 @@ func Load() (*Config, error) {
 		JWTRefreshSecret: getEnv("JWT_REFRESH_SECRET", "dev-refresh-secret"),
 	}
 
-	accessTTL, err := time.ParseDuration(getEnv("JWT_ACCESS_TTL", "15m"))
+	accessTTL, err := time.ParseDuration(getEnv("JWT_ACCESS_TTL", "20m"))
 	if err != nil {
 		return nil, fmt.Errorf("parse JWT_ACCESS_TTL: %w", err)
 	}
-	refreshTTL, err := time.ParseDuration(getEnv("JWT_REFRESH_TTL", "168h"))
+	refreshTTL, err := time.ParseDuration(getEnv("JWT_REFRESH_TTL", "720h"))
 	if err != nil {
 		return nil, fmt.Errorf("parse JWT_REFRESH_TTL: %w", err)
 	}

@@ -32,10 +32,11 @@ func main() {
 		RefreshTTL:    cfg.JWTRefreshTTL,
 	})
 	userHandler := handler.NewUserHandler(userService)
+	authMiddleware := middleware.Auth()
 
 	router := gin.New()
 	middleware.Setup(router)
-	handler.RegisterRoutes(router, userHandler)
+	handler.RegisterRoutes(router, userHandler, authMiddleware)
 
 	if err := router.Run(":" + cfg.ServerPort); err != nil {
 		log.Fatalf("failed to run server: %v", err)

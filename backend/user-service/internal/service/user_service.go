@@ -43,6 +43,7 @@ type UserService struct {
 
 type tokenClaims struct {
 	TokenType string `json:"token_type"`
+	UserID    uint   `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
@@ -52,10 +53,10 @@ func NewUserService(userRepository repository.UserRepository, cfg UserServiceCon
 		bcryptCost = defaultBcryptCost
 	}
 	if cfg.AccessTTL <= 0 {
-		cfg.AccessTTL = 15 * time.Minute
+		cfg.AccessTTL = 20 * time.Minute
 	}
 	if cfg.RefreshTTL <= 0 {
-		cfg.RefreshTTL = 7 * 24 * time.Hour
+		cfg.RefreshTTL = 30 * 24 * time.Hour
 	}
 
 	return &UserService{
@@ -259,6 +260,84 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uint, req dto.Up
 	return toProfileResponse(profile), nil
 }
 
+func (s *UserService) CreateDriverLicense(ctx context.Context, userID uint, req dto.CreateDriverLicenseRequest) (*dto.DriverLicenseResponse, error) {
+	if userID == 0 {
+		return nil, validationError("user_id must be greater than zero")
+	}
+
+	issuedAt, err := parseRequiredDate(req.IssuedAt, "issued_at")
+	if err != nil {
+		return nil, err
+	}
+	expiresAt, err := parseRequiredDate(req.ExpiresAt, "expires_at")
+	if err != nil {
+		return nil, err
+	}
+	if expiresAt.Before(issuedAt) {
+		return nil, validationError("expires_at cannot be before issued_at")
+	}
+
+	categories := make([]domains.DriverLicenseCategory, 0, len(req.Categories))
+	for _, categoryReq := range req.Categories {
+		categoryCode, err := validateCategoryCode(categoryReq.CategoryCode)
+		if err != nil {
+			return nil, err
+		}
+
+		category := domains.DriverLicenseCategory{
+			CategoryCode: categoryCode,
+		}
+
+		if strings.TrimSpace(categoryReq.IssuedAt) != "" {
+			categoryIssuedAt, err := parseOptionalDate(categoryReq.IssuedAt, "categories.issued_at")
+			if err != nil {
+				return nil, err
+			}
+			category.IssuedAt = &categoryIssuedAt
+		}
+
+		if strings.TrimSpace(categoryReq.ExpiresAt) != "" {
+			categoryExpiresAt, err := parseOptionalDate(categoryReq.ExpiresAt, "categories.expires_at")
+			if err != nil {
+				return nil, err
+			}
+			category.ExpiresAt = &categoryExpiresAt
+			if category.IssuedAt != nil && category.ExpiresAt.Before(*category.IssuedAt) {
+				return nil, validationError("categories.expires_at cannot be before categories.issued_at")
+			}
+		}
+
+		categories = append(categories, category)
+	}
+
+	licenseNumber := strings.TrimSpace(req.LicenseNumber)
+	if licenseNumber == "" {
+		return nil, validationError("license_number is required")
+	}
+	if len([]rune(licenseNumber)) > 100 {
+		return nil, validationError("license_number must be at most 100 characters")
+	}
+
+	license := &domains.DriverLicense{
+		UserID:        userID,
+		LicenseNumber: licenseNumber,
+		IssuedAt:      issuedAt,
+		ExpiresAt:     expiresAt,
+		Categories:    categories,
+	}
+
+	if err := s.userRepository.CreateDriverLicense(ctx, license); err != nil {
+		return nil, err
+	}
+
+	createdLicense, err := s.userRepository.GetDriverLicense(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return toDriverLicenseResponse(createdLicense), nil
+}
+
 func (s *UserService) issueAndPersistTokens(ctx context.Context, userID uint) (*dto.TokenPairResponse, error) {
 	now := s.now()
 	accessToken, err := s.generateToken(userID, "access", now.Add(s.accessTTL), s.accessSecret)
@@ -287,6 +366,7 @@ func (s *UserService) issueAndPersistTokens(ctx context.Context, userID uint) (*
 func (s *UserService) generateToken(userID uint, tokenType string, expiresAt time.Time, secret []byte) (string, error) {
 	claims := tokenClaims{
 		TokenType: tokenType,
+		UserID:    userID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   fmt.Sprintf("%d", userID),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
@@ -319,6 +399,12 @@ func (s *UserService) parseToken(tokenString string, secret []byte, expectedType
 		return nil, apperrors.ErrInvalidToken
 	}
 	if claims.TokenType != expectedType {
+		return nil, apperrors.ErrInvalidToken
+	}
+	if claims.UserID == 0 {
+		return nil, apperrors.ErrInvalidToken
+	}
+	if claims.Subject != "" && claims.Subject != fmt.Sprintf("%d", claims.UserID) {
 		return nil, apperrors.ErrInvalidToken
 	}
 	return claims, nil
@@ -358,19 +444,51 @@ func validateName(value string, field string) (string, error) {
 }
 
 func parseBirthDate(value string) (time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return time.Time{}, validationError("birth_date is required")
-	}
-
-	birthDate, err := time.Parse(birthDateLayout, value)
+	birthDate, err := parseRequiredDate(value, "birth_date")
 	if err != nil {
-		return time.Time{}, validationError("birth_date must match YYYY-MM-DD")
+		return time.Time{}, err
 	}
 	if birthDate.After(time.Now()) {
 		return time.Time{}, validationError("birth_date cannot be in the future")
 	}
 	return birthDate, nil
+}
+
+func parseRequiredDate(value string, field string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, validationError(field + " is required")
+	}
+
+	parsed, err := time.Parse(birthDateLayout, value)
+	if err != nil {
+		return time.Time{}, validationError(field + " must match YYYY-MM-DD")
+	}
+	return parsed, nil
+}
+
+func parseOptionalDate(value string, field string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, nil
+	}
+
+	parsed, err := time.Parse(birthDateLayout, value)
+	if err != nil {
+		return time.Time{}, validationError(field + " must match YYYY-MM-DD")
+	}
+	return parsed, nil
+}
+
+func validateCategoryCode(value string) (string, error) {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if value == "" {
+		return "", validationError("category_code is required")
+	}
+	if len([]rune(value)) > 10 {
+		return "", validationError("category_code must be at most 10 characters")
+	}
+	return value, nil
 }
 
 func validationError(message string) error {
@@ -390,5 +508,24 @@ func toProfileResponse(profile *domains.UserProfile) *dto.ProfileResponse {
 		FirstName: profile.FirstName,
 		LastName:  profile.LastName,
 		BirthDate: profile.BirthDate,
+	}
+}
+
+func toDriverLicenseResponse(license *domains.DriverLicense) *dto.DriverLicenseResponse {
+	categories := make([]dto.DriverLicenseCategoryResponse, 0, len(license.Categories))
+	for _, category := range license.Categories {
+		categories = append(categories, dto.DriverLicenseCategoryResponse{
+			CategoryCode: category.CategoryCode,
+			IssuedAt:     category.IssuedAt,
+			ExpiresAt:    category.ExpiresAt,
+		})
+	}
+
+	return &dto.DriverLicenseResponse{
+		UserID:        license.UserID,
+		LicenseNumber: license.LicenseNumber,
+		IssuedAt:      license.IssuedAt,
+		ExpiresAt:     license.ExpiresAt,
+		Categories:    categories,
 	}
 }
