@@ -146,6 +146,22 @@ func (h *UserHandler) CreateDriverLicense(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
+func (h *UserHandler) GetDriverLicense(c *gin.Context) {
+	userID, ok := middleware.UserIDFromContext(c.Request.Context())
+	if !ok {
+		writeError(c, http.StatusUnauthorized, "user_id is missing in context")
+		return
+	}
+
+	resp, err := h.userService.GetDriverLicense(c.Request.Context(), userID)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func handleServiceError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, apperrors.ErrValidation):

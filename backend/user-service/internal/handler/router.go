@@ -16,6 +16,7 @@ func RegisterRoutes(router *gin.Engine, userHandler *UserHandler, authMiddleware
 		{
 			protected.GET("/profile", userHandler.GetProfile)
 			protected.PUT("/profile", userHandler.UpdateProfile)
+			protected.GET("/driver-license", userHandler.GetDriverLicense)
 			protected.POST("/driver-license", userHandler.CreateDriverLicense)
 		}
 	}

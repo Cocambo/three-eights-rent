@@ -40,6 +40,7 @@ func Register(engine *gin.Engine, cfg *config.Config) {
 	{
 		protectedUsers.GET("/profile", userProxy)
 		protectedUsers.PUT("/profile", userProxy)
+		protectedUsers.GET("/driver-license", userProxy)
 		protectedUsers.POST("/driver-license", userProxy)
 	}
 }

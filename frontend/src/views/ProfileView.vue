@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="profile-page">
     <AppHeader />
 
@@ -9,14 +9,15 @@
             <div class="avatar-block__image-wrap">
               <img
                 class="avatar-block__image"
-                :src="profile.avatar"
-                :alt="profile.fullName"
+                :src="avatar"
+                :alt="authStore.displayName"
               />
             </div>
           </div>
 
           <div class="profile-card__title-wrap">
-            <h1 class="profile-card__title">{{ profile.fullName }}</h1>
+            <h1 class="profile-card__title">{{ authStore.displayName }}</h1>
+            <p class="profile-card__subtitle">{{ authStore.user?.email }}</p>
           </div>
         </div>
 
@@ -57,10 +58,10 @@
             <label class="form-field__label" for="email">Электронная почта</label>
             <input
               id="email"
-              v-model="form.email"
+              :value="authStore.user?.email || ''"
               class="form-field__input"
               type="email"
-              placeholder="Введите email"
+              readonly
             />
           </div>
         </div>
@@ -126,9 +127,27 @@
         </div>
       </section>
 
+      <p v-if="feedbackMessage" :class="feedbackClass">
+        {{ feedbackMessage }}
+      </p>
+
       <div class="profile-actions">
-        <button class="profile-actions__save" type="button" @click="saveProfile">
-          Сохранить изменения
+        <button
+          class="profile-actions__logout"
+          type="button"
+          :disabled="isLoggingOut"
+          @click="handleLogout"
+        >
+          {{ isLoggingOut ? 'Выходим...' : 'Выйти' }}
+        </button>
+
+        <button
+          class="profile-actions__save"
+          type="button"
+          :disabled="isSaving || authStore.isProfileLoading"
+          @click="saveProfile"
+        >
+          {{ isSaving ? 'Сохраняем...' : 'Сохранить изменения' }}
         </button>
       </div>
     </main>
@@ -137,23 +156,21 @@
   </div>
 </template>
 
-<script setup>
-import { reactive, computed, onMounted } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
 import AppHeader from '@/components/AppHeader.vue'
 import AppFooter from '@/components/AppFooter.vue'
 import avatar from '@/assets/profile_avatar.png'
+import { ApiError, formatDateForInput, useAuthStore } from '@/stores/auth'
 
-const profile = reactive({
-  firstName: 'Иван',
-  lastName: 'Иванов',
-  birthDate: '1992-07-18',
-  email: 'example@threeeights.ru',
-  avatar,
-  licenseNumber: '',
-  issueDate: '2018-05-12',
-  expirationDate: '2028-05-12',
-  categories: ['B', 'C', 'D'],
-})
+const authStore = useAuthStore()
+const router = useRouter()
+const isSaving = ref(false)
+const isLoggingOut = ref(false)
+const feedbackMessage = ref('')
+const feedbackType = ref<'success' | 'error'>('success')
 
 const categories = ['A', 'B', 'C', 'D', 'E']
 
@@ -161,67 +178,118 @@ const form = reactive({
   firstName: '',
   lastName: '',
   birthDate: '',
-  email: '',
   licenseNumber: '',
   issueDate: '',
   expirationDate: '',
-  categories: [],
+  categories: [] as string[],
 })
 
-const fullName = computed(() => `${profile.firstName} ${profile.lastName}`)
+const feedbackClass = computed(() =>
+  feedbackType.value === 'success'
+    ? 'profile-feedback profile-feedback--success'
+    : 'profile-feedback profile-feedback--error',
+)
 
-profile.fullName = fullName.value
-
-const fillFormFromProfile = () => {
-  form.firstName = profile.firstName
-  form.lastName = profile.lastName
-  form.birthDate = profile.birthDate
-  form.email = profile.email
-  form.licenseNumber = profile.licenseNumber
-  form.issueDate = profile.issueDate
-  form.expirationDate = profile.expirationDate
-  form.categories = [...profile.categories]
+const fillFormFromStore = () => {
+  form.firstName = authStore.profile?.first_name || ''
+  form.lastName = authStore.profile?.last_name || ''
+  form.birthDate = formatDateForInput(authStore.profile?.birth_date)
+  form.licenseNumber = authStore.driverLicense?.license_number || ''
+  form.issueDate = formatDateForInput(authStore.driverLicense?.issued_at)
+  form.expirationDate = formatDateForInput(authStore.driverLicense?.expires_at)
+  form.categories = authStore.driverLicense?.categories.map((category) => category.category_code) || []
 }
 
 const fetchProfile = async () => {
   try {
-    // TODO: заменить на реальный API-запрос
-    // const response = await api.get('/profile')
-    // Object.assign(profile, response.data)
-
-    fillFormFromProfile()
+    feedbackMessage.value = ''
+    await authStore.fetchProfile()
+    fillFormFromStore()
   } catch (error) {
-    console.error('Ошибка при загрузке профиля:', error)
+    if (error instanceof ApiError && error.status === 401) {
+      await router.push({ name: 'login', query: { redirect: '/profile' } })
+      return
+    }
+
+    feedbackType.value = 'error'
+    feedbackMessage.value = 'Не удалось загрузить профиль.'
   }
 }
 
 const saveProfile = async () => {
+  feedbackMessage.value = ''
+
+  if (!form.firstName || !form.lastName || !form.birthDate) {
+    feedbackType.value = 'error'
+    feedbackMessage.value = 'Заполните имя, фамилию и дату рождения.'
+    return
+  }
+
+  const hasAnyLicenseField = Boolean(
+    form.licenseNumber || form.issueDate || form.expirationDate || form.categories.length,
+  )
+
+  if (
+    hasAnyLicenseField
+    && (!form.licenseNumber || !form.issueDate || !form.expirationDate || form.categories.length === 0)
+  ) {
+    feedbackType.value = 'error'
+    feedbackMessage.value =
+      'Чтобы сохранить водительское удостоверение, заполните номер, даты и выберите хотя бы одну категорию.'
+    return
+  }
+
   try {
-    const payload = {
+    isSaving.value = true
+
+    await authStore.updateProfile({
       firstName: form.firstName,
       lastName: form.lastName,
       birthDate: form.birthDate,
-      email: form.email,
-      licenseNumber: form.licenseNumber,
-      issueDate: form.issueDate,
-      expirationDate: form.expirationDate,
-      categories: form.categories,
+    })
+
+    if (hasAnyLicenseField) {
+      await authStore.saveDriverLicense({
+        licenseNumber: form.licenseNumber,
+        issuedAt: form.issueDate,
+        expiresAt: form.expirationDate,
+        categories: form.categories,
+      })
     }
 
-    // TODO: заменить на реальный API-запрос
-    // await api.put('/profile', payload)
-
-    Object.assign(profile, payload)
-    profile.fullName = `${payload.firstName} ${payload.lastName}`
-
-    console.log('Профиль сохранен:', payload)
+    fillFormFromStore()
+    feedbackType.value = 'success'
+    feedbackMessage.value = 'Профиль успешно сохранён.'
   } catch (error) {
-    console.error('Ошибка при сохранении профиля:', error)
+    if (error instanceof ApiError) {
+      feedbackType.value = 'error'
+      feedbackMessage.value = error.message
+      return
+    }
+
+    feedbackType.value = 'error'
+    feedbackMessage.value = 'Не удалось сохранить профиль.'
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const handleLogout = async () => {
+  try {
+    isLoggingOut.value = true
+    await authStore.logout()
+    await router.push({ name: 'login' })
+  } catch {
+    feedbackType.value = 'error'
+    feedbackMessage.value = 'Не удалось завершить сессию.'
+  } finally {
+    isLoggingOut.value = false
   }
 }
 
 onMounted(() => {
-  fetchProfile()
+  fillFormFromStore()
+  void fetchProfile()
 })
 </script>
 
@@ -300,23 +368,6 @@ onMounted(() => {
   object-fit: cover;
 }
 
-.avatar-block__edit-btn {
-  position: absolute;
-  right: -8px;
-  bottom: -8px;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 12px;
-  background-color: #001944;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0, 25, 68, 0.18);
-}
-
 .profile-card__title-wrap {
   display: flex;
   flex-direction: column;
@@ -351,7 +402,7 @@ onMounted(() => {
   gap: 8px;
 }
 
-  .form-field__label {
+.form-field__label {
   padding-left: 4px;
   font-size: 12px;
   font-weight: 600;
@@ -459,9 +510,11 @@ onMounted(() => {
   margin-top: 8px;
   display: flex;
   justify-content: center;
+  gap: 12px;
 }
 
 .profile-actions__save {
+  min-width: 220px;
   min-height: 52px;
   padding: 0 24px;
   border: none;
@@ -474,13 +527,47 @@ onMounted(() => {
   transition:
     background-color 0.2s ease,
     transform 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .profile-actions__save:hover {
   background-color: #002c6d;
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(0, 25, 68, 0.16);
+}
+
+.profile-actions__save:disabled,
+.profile-actions__logout:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.profile-actions__logout {
+  min-height: 52px;
+  padding: 0 24px;
+  border: 1px solid rgba(0, 25, 68, 0.14);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #001944;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-feedback {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.profile-feedback--success {
+  color: #005d2d;
+}
+
+.profile-feedback--error {
+  color: #ba1a1a;
 }
 
 @media (max-width: 768px) {
@@ -508,5 +595,8 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .profile-actions {
+    flex-direction: column;
+  }
 }
 </style>

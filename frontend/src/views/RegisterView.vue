@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <main class="register-view">
     <div class="register-view__bg register-view__bg--top" aria-hidden="true"></div>
     <div class="register-view__bg register-view__bg--bottom" aria-hidden="true"></div>
@@ -95,7 +95,7 @@
 
           <div class="register-form__actions">
             <button class="button button--primary" type="submit" :disabled="isLoading">
-              {{ isLoading ? 'Регистрация...' : 'Зарегистрироваться' }}
+              {{ isLoading ? 'Регистрируем...' : 'Зарегистрироваться' }}
             </button>
 
             <div class="register-form__divider" aria-hidden="true">
@@ -112,48 +112,72 @@
 
         <p class="register-card__policy">
           Нажимая «Зарегистрироваться», вы принимаете наши
-          <a href="#">Условия использования</a>
+          <a href="#">условия использования</a>
           и
-          <a href="#">Политику конфиденциальности</a>.
+          <a href="#">политику конфиденциальности</a>.
+        </p>
+
+        <p v-if="errorMessage" class="register-card__feedback register-card__feedback--error">
+          {{ errorMessage }}
+        </p>
+
+        <p v-if="successMessage" class="register-card__feedback register-card__feedback--success">
+          {{ successMessage }}
         </p>
       </section>
     </section>
   </main>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
+
+import { ApiError, useAuthStore } from '@/stores/auth'
 
 const isLoading = ref(false)
+const errorMessage = ref('')
+const successMessage = ref('')
+const authStore = useAuthStore()
+const router = useRouter()
 
 const form = reactive({
   firstName: '',
   lastName: '',
   email: '',
   password: '',
-  birthDate: ''
+  birthDate: '',
 })
 
 const handleSubmit = async () => {
+  errorMessage.value = ''
+  successMessage.value = ''
+
+  if (!form.firstName || !form.lastName || !form.email || !form.password || !form.birthDate) {
+    errorMessage.value = 'Заполните все поля формы.'
+    return
+  }
+
   try {
     isLoading.value = true
 
-    // TODO: заменить на реальный API-запрос
-    const payload = {
+    await authStore.register({
       firstName: form.firstName,
       lastName: form.lastName,
       email: form.email,
       password: form.password,
-      birthDate: form.birthDate
+      birthDate: form.birthDate,
+    })
+
+    successMessage.value = 'Регистрация прошла успешно.'
+    await router.push({ name: 'profile' })
+  } catch (error) {
+    if (error instanceof ApiError) {
+      errorMessage.value = error.message
+      return
     }
 
-    console.log('Register payload:', payload)
-
-    // Пример будущего запроса:
-    // await api.post('/auth/register', payload)
-  } catch (error) {
-    console.error('Ошибка регистрации:', error)
+    errorMessage.value = 'Не удалось завершить регистрацию.'
   } finally {
     isLoading.value = false
   }
@@ -305,13 +329,6 @@ const handleSubmit = async () => {
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.03em;
-}
-
-.register-card__subheading {
-  margin: 0;
-  font-size: 0.84rem;
-  line-height: 1.45;
-  color: #454652;
 }
 
 .register-form {
@@ -470,6 +487,21 @@ const handleSubmit = async () => {
 
 .register-card__policy a:hover {
   color: #001944;
+}
+
+.register-card__feedback {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.register-card__feedback--error {
+  color: #ba1a1a;
+}
+
+.register-card__feedback--success {
+  color: #005d2d;
 }
 
 @media (max-width: 960px) {

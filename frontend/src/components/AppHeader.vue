@@ -1,49 +1,90 @@
-<template>
+﻿<template>
   <header class="app-header">
     <div class="app-header__container">
-      <div class="app-header__logo">Three Eights Rent</div>
-
-      <!-- <nav class="app-header__nav">
-        <a class="app-header__link" href="#">Главная</a>
-        <a class="app-header__link" href="#">Автопарк</a>
-        <a class="app-header__link app-header__link--active" href="#">Профиль</a>
-      </nav> -->
+      <RouterLink class="app-header__logo" :to="{ name: 'home' }">
+        Three Eights Rent
+      </RouterLink>
 
       <nav class="app-header__nav">
-        <router-link
+        <RouterLink
           to="/"
           class="app-header__link"
           active-class="app-header__link--active"
           exact-active-class="app-header__link--active"
         >
           Главная
-        </router-link>
+        </RouterLink>
 
-        <router-link
-          to="/catalog"
-          class="app-header__link"
-          active-class="app-header__link--active"
-        >
-          Автопарк
-        </router-link>
-
-        <router-link
+        <RouterLink
+          v-if="authStore.isAuthenticated"
           to="/profile"
           class="app-header__link"
           active-class="app-header__link--active"
         >
           Профиль
-        </router-link>
+        </RouterLink>
       </nav>
 
-      <button class="app-header__profile-btn" type="button" aria-label="Профиль">
-        <span class="material-symbols-outlined">person</span>
-      </button>
+      <div class="app-header__actions">
+        <template v-if="authStore.isAuthenticated">
+          <RouterLink
+            class="app-header__profile-btn"
+            :to="{ name: 'profile' }"
+            :aria-label="`Перейти в профиль ${authStore.displayName}`"
+            title="Профиль"
+          >
+            <span class="material-symbols-outlined">person</span>
+          </RouterLink>
+
+          <button
+            class="app-header__login-btn app-header__logout-btn"
+            type="button"
+            :disabled="isLoggingOut"
+            @click="handleLogout"
+          >
+            {{ isLoggingOut ? 'Выходим...' : 'Выйти' }}
+          </button>
+        </template>
+
+        <RouterLink
+          v-else
+          class="app-header__login-btn"
+          :to="{ name: 'login' }"
+        >
+          Войти
+        </RouterLink>
+      </div>
     </div>
   </header>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import { ref } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+
+import { ApiError, useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const isLoggingOut = ref(false)
+
+const handleLogout = async () => {
+  try {
+    isLoggingOut.value = true
+    await authStore.logout()
+
+    if (route.name !== 'home') {
+      await router.push({ name: 'home' })
+    }
+  } catch (error) {
+    if (!(error instanceof ApiError)) {
+      console.error('Не удалось завершить сессию:', error)
+    }
+  } finally {
+    isLoggingOut.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -68,6 +109,7 @@
 }
 
 .app-header__logo {
+  text-decoration: none;
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 22px;
   font-weight: 800;
@@ -93,6 +135,12 @@
   color: #001944;
 }
 
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .app-header__profile-btn {
   width: 40px;
   height: 40px;
@@ -104,6 +152,43 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  text-decoration: none;
+}
+
+.app-header__login-btn {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid rgba(0, 25, 68, 0.14);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #001944;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.app-header__login-btn:hover {
+  background: #eef5ff;
+  border-color: rgba(0, 25, 68, 0.24);
+}
+
+.app-header__login-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.app-header__logout-btn {
+  border: none;
+  background: #001944;
+  color: #ffffff;
 }
 
 @media (max-width: 768px) {

@@ -125,16 +125,26 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+
+import { ApiError, useAuthStore } from '@/stores/auth'
 
 const form = reactive({
   email: '',
   password: '',
 })
 
+const authStore = useAuthStore()
+const router = useRouter()
+const route = useRoute()
 const showPassword = ref(false)
 const isLoading = ref(false)
 const errorMessage = ref('')
+
+const resolveRedirect = () => {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/profile'
+}
 
 const handleSubmit = async () => {
   errorMessage.value = ''
@@ -147,34 +157,27 @@ const handleSubmit = async () => {
   try {
     isLoading.value = true
 
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    console.log('Демо-авторизация:', {
+    await authStore.login({
       email: form.email,
       password: form.password,
     })
 
-    errorMessage.value = 'Демо-режим: запрос на сервер пока не отправляется.'
+    await router.push(resolveRedirect())
   } catch (error) {
-    errorMessage.value =
-      error instanceof Error ? error.message : 'Не удалось выполнить вход.'
+    if (error instanceof ApiError) {
+      errorMessage.value = error.message
+      return
+    }
+
+    errorMessage.value = 'Не удалось выполнить вход.'
   } finally {
     isLoading.value = false
   }
 }
 
 const handleForgotPassword = () => {
-  errorMessage.value = 'Это демонстрационная верстка. Восстановление пока не подключено.'
+  errorMessage.value = 'Восстановление пароля пока не подключено.'
 }
-
-const handleGoogleLogin = () => {
-  errorMessage.value = 'Это демонстрационная верстка. Вход через Google пока не подключен.'
-}
-
-const handleAppleLogin = () => {
-  errorMessage.value = 'Это демонстрационная верстка. Вход через Apple ID пока не подключен.'
-}
-
 </script>
 
 <style scoped>
@@ -283,19 +286,6 @@ const handleAppleLogin = () => {
   gap: 24px;
 }
 
-.hero-badge {
-  display: inline-flex;
-  align-self: flex-start;
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: #69ff87;
-  color: #002108;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
 .hero-title {
   margin: 0;
   color: #ffffff;
@@ -319,31 +309,6 @@ const handleAppleLogin = () => {
   gap: 16px;
   color: rgba(255, 255, 255, 0.7);
   font-size: 14px;
-}
-
-.clients-preview {
-  display: flex;
-}
-
-.clients-preview__item {
-  width: 32px;
-  height: 32px;
-  margin-left: -8px;
-  border: 2px solid #001944;
-  border-radius: 50%;
-}
-
-.clients-preview__item:nth-child(1) {
-  margin-left: 0;
-  background: #d7e4ec;
-}
-
-.clients-preview__item:nth-child(2) {
-  background: #ddeaf2;
-}
-
-.clients-preview__item:nth-child(3) {
-  background: #e3f0f8;
 }
 
 .login-hero__blur {
@@ -525,81 +490,6 @@ const handleAppleLogin = () => {
   font-size: 18px;
 }
 
-.divider {
-  position: relative;
-  margin: 40px 0;
-  text-align: center;
-}
-
-.divider::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 100%;
-  border-top: 1px solid rgba(198, 197, 212, 0.5);
-  transform: translateY(-50%);
-}
-
-.divider span {
-  position: relative;
-  z-index: 1;
-  display: inline-block;
-  padding: 0 16px;
-  background: #ffffff;
-  color: #767683;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-}
-
-.social-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 40px;
-}
-
-.social-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 50px;
-  padding: 12px 16px;
-  border: 1px solid rgba(198, 197, 212, 0.5);
-  border-radius: 14px;
-  background: #ffffff;
-  color: #111d23;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.social-button:hover {
-  background: #e9f6fd;
-  border-color: #b0c6ff;
-  transform: translateY(-1px);
-}
-
-.social-button__icon {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-  opacity: 0.8;
-  filter: grayscale(1);
-}
-
-.social-button__apple {
-  font-size: 14px;
-  line-height: 1;
-}
-
 .register-block {
   text-align: center;
   margin: 10px;
@@ -678,10 +568,6 @@ const handleAppleLogin = () => {
 @media (max-width: 640px) {
   .login-title {
     font-size: 30px;
-  }
-
-  .social-buttons {
-    grid-template-columns: 1fr;
   }
 
   .login-form-wrapper {

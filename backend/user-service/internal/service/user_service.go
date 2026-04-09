@@ -338,6 +338,19 @@ func (s *UserService) CreateDriverLicense(ctx context.Context, userID uint, req 
 	return toDriverLicenseResponse(createdLicense), nil
 }
 
+func (s *UserService) GetDriverLicense(ctx context.Context, userID uint) (*dto.DriverLicenseResponse, error) {
+	if userID == 0 {
+		return nil, validationError("user_id must be greater than zero")
+	}
+
+	license, err := s.userRepository.GetDriverLicense(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return toDriverLicenseResponse(license), nil
+}
+
 func (s *UserService) issueAndPersistTokens(ctx context.Context, userID uint) (*dto.TokenPairResponse, error) {
 	now := s.now()
 	accessToken, err := s.generateToken(userID, "access", now.Add(s.accessTTL), s.accessSecret)

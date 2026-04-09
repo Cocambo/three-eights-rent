@@ -110,10 +110,44 @@ func (r *gormUserRepository) UpdateProfile(ctx context.Context, profile *domains
 }
 
 func (r *gormUserRepository) CreateDriverLicense(ctx context.Context, license *domains.DriverLicense) error {
-	if err := r.db.WithContext(ctx).Create(license).Error; err != nil {
-		return mapDBError(err)
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var existing domains.DriverLicense
+		err := tx.Where("user_id = ?", license.UserID).First(&existing).Error
+		switch {
+		case err == nil:
+			if err := tx.Model(&existing).Updates(map[string]any{
+				"license_number": license.LicenseNumber,
+				"issued_at":      license.IssuedAt,
+				"expires_at":     license.ExpiresAt,
+			}).Error; err != nil {
+				return mapDBError(err)
+			}
+
+			if err := tx.Where("driver_license_id = ?", existing.ID).Delete(&domains.DriverLicenseCategory{}).Error; err != nil {
+				return mapDBError(err)
+			}
+
+			for i := range license.Categories {
+				license.Categories[i].DriverLicenseID = existing.ID
+			}
+
+			if len(license.Categories) > 0 {
+				if err := tx.Create(&license.Categories).Error; err != nil {
+					return mapDBError(err)
+				}
+			}
+
+			license.ID = existing.ID
+			return nil
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			if err := tx.Create(license).Error; err != nil {
+				return mapDBError(err)
+			}
+			return nil
+		default:
+			return mapDBError(err)
+		}
+	})
 }
 
 func (r *gormUserRepository) GetDriverLicense(ctx context.Context, userID uint) (*domains.DriverLicense, error) {
