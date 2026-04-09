@@ -12,7 +12,9 @@
 
         <div class="login-hero__content">
           <div class="login-hero__top">
-            <h2 class="brand-title">Three Eights Rent</h2>
+            <RouterLink class="brand-title" :to="{ name: 'home' }">
+              Three Eights Rent
+            </RouterLink>
           </div>
           <div class="login-hero__middle">
             <h1 class="hero-title">
@@ -48,7 +50,7 @@
                   v-model="form.email"
                   type="email"
                   class="form-input"
-                  placeholder="example@threeight.ru"
+                  placeholder="example@threeights.ru"
                   autocomplete="email"
                 />
               </div>
@@ -100,13 +102,12 @@
           <div class="register-block">
             <p>
               Нет аккаунта?
-              <button
-                type="button"
+              <RouterLink
                 class="register-link"
-                @click="handleRegister"
+                :to="{ name: 'register' }"
               >
                 Зарегистрироваться
-              </button>
+              </RouterLink>
             </p>
           </div>
 
@@ -124,6 +125,7 @@
 
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 
 const form = reactive({
   email: '',
@@ -173,9 +175,6 @@ const handleAppleLogin = () => {
   errorMessage.value = 'Это демонстрационная верстка. Вход через Apple ID пока не подключен.'
 }
 
-const handleRegister = () => {
-  errorMessage.value = 'Это демонстрационная верстка. Регистрация пока не подключена.'
-}
 </script>
 
 <style scoped>
@@ -257,11 +256,25 @@ const handleRegister = () => {
 }
 
 .brand-title {
+  display: inline-flex;
+  align-items: center;
   margin: 0;
   color: #ffffff;
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.03em;
+  text-decoration: none;
+  transition: opacity 0.2s ease;
+}
+
+.brand-title:hover {
+  opacity: 0.82;
+}
+
+.brand-title:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 6px;
+  border-radius: 6px;
 }
 
 .login-hero__middle {
