@@ -43,7 +43,17 @@
             />
           </div>
 
-          <div class="form-field form-field--full">
+          <div class="form-field">
+            <label class="form-field__label" for="birthDate">Дата рождения</label>
+            <input
+              id="birthDate"
+              v-model="form.birthDate"
+              class="form-field__input"
+              type="date"
+            />
+          </div>
+
+          <div class="form-field">
             <label class="form-field__label" for="email">Электронная почта</label>
             <input
               id="email"
@@ -83,6 +93,16 @@
               type="date"
             />
           </div>
+
+          <div class="form-field">
+            <label class="form-field__label" for="expirationDate">Дата окончания действия</label>
+            <input
+              id="expirationDate"
+              v-model="form.expirationDate"
+              class="form-field__input"
+              type="date"
+            />
+          </div>
         </div>
 
         <div class="categories">
@@ -104,13 +124,13 @@
             </label>
           </div>
         </div>
-
-        <div class="profile-actions">
-          <button class="profile-actions__save" type="button" @click="saveProfile">
-            Сохранить изменения
-          </button>
-        </div>
       </section>
+
+      <div class="profile-actions">
+        <button class="profile-actions__save" type="button" @click="saveProfile">
+          Сохранить изменения
+        </button>
+      </div>
     </main>
 
     <AppFooter />
@@ -126,11 +146,12 @@ import avatar from '@/assets/profile_avatar.png'
 const profile = reactive({
   firstName: 'Иван',
   lastName: 'Иванов',
+  birthDate: '1992-07-18',
   email: 'example@threeeights.ru',
-  avatar:
-    avatar,
+  avatar,
   licenseNumber: '',
   issueDate: '2018-05-12',
+  expirationDate: '2028-05-12',
   categories: ['B', 'C', 'D'],
 })
 
@@ -139,9 +160,11 @@ const categories = ['A', 'B', 'C', 'D', 'E']
 const form = reactive({
   firstName: '',
   lastName: '',
+  birthDate: '',
   email: '',
   licenseNumber: '',
   issueDate: '',
+  expirationDate: '',
   categories: [],
 })
 
@@ -152,9 +175,11 @@ profile.fullName = fullName.value
 const fillFormFromProfile = () => {
   form.firstName = profile.firstName
   form.lastName = profile.lastName
+  form.birthDate = profile.birthDate
   form.email = profile.email
   form.licenseNumber = profile.licenseNumber
   form.issueDate = profile.issueDate
+  form.expirationDate = profile.expirationDate
   form.categories = [...profile.categories]
 }
 
@@ -175,9 +200,11 @@ const saveProfile = async () => {
     const payload = {
       firstName: form.firstName,
       lastName: form.lastName,
+      birthDate: form.birthDate,
       email: form.email,
       licenseNumber: form.licenseNumber,
       issueDate: form.issueDate,
+      expirationDate: form.expirationDate,
       categories: form.categories,
     }
 
@@ -324,11 +351,7 @@ onMounted(() => {
   gap: 8px;
 }
 
-.form-field--full {
-  grid-column: 1 / -1;
-}
-
-.form-field__label {
+  .form-field__label {
   padding-left: 4px;
   font-size: 12px;
   font-weight: 600;
@@ -433,9 +456,9 @@ onMounted(() => {
 }
 
 .profile-actions {
-  margin-top: 32px;
+  margin-top: 8px;
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .profile-actions__save {
@@ -485,8 +508,5 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .form-field--full {
-    grid-column: auto;
-  }
 }
 </style>
