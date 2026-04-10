@@ -143,7 +143,7 @@ const errorMessage = ref('')
 
 const resolveRedirect = () => {
   const redirect = route.query.redirect
-  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/profile'
+  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/'
 }
 
 const handleSubmit = async () => {
@@ -165,7 +165,8 @@ const handleSubmit = async () => {
     await router.push(resolveRedirect())
   } catch (error) {
     if (error instanceof ApiError) {
-      errorMessage.value = error.message
+      errorMessage.value =
+        error.status === 401 ? 'Логин или пароль неверный.' : error.message
       return
     }
 

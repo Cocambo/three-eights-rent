@@ -7,7 +7,7 @@
 
       <nav class="app-header__nav">
         <RouterLink
-          to="/"
+          :to="{ name: 'home' }"
           class="app-header__link"
           active-class="app-header__link--active"
           exact-active-class="app-header__link--active"
@@ -16,35 +16,42 @@
         </RouterLink>
 
         <RouterLink
-          v-if="authStore.isAuthenticated"
-          to="/profile"
+          :to="{ name: 'cars' }"
           class="app-header__link"
           active-class="app-header__link--active"
         >
-          Профиль
+          Автомобили
+        </RouterLink>
+
+        <RouterLink
+          :to="{ name: 'favorites' }"
+          class="app-header__link"
+          active-class="app-header__link--active"
+        >
+          Избранное
         </RouterLink>
       </nav>
 
       <div class="app-header__actions">
-        <template v-if="authStore.isAuthenticated">
-          <RouterLink
-            class="app-header__profile-btn"
-            :to="{ name: 'profile' }"
-            :aria-label="`Перейти в профиль ${authStore.displayName}`"
-            title="Профиль"
-          >
-            <span class="material-symbols-outlined">person</span>
-          </RouterLink>
+        <label v-if="showSearch" class="app-header__search">
+          <span class="material-symbols-outlined">search</span>
+          <input
+            :value="searchQuery"
+            type="search"
+            placeholder="Поиск автомобилей"
+            @input="updateSearchQuery"
+          />
+        </label>
 
-          <button
-            class="app-header__login-btn app-header__logout-btn"
-            type="button"
-            :disabled="isLoggingOut"
-            @click="handleLogout"
-          >
-            {{ isLoggingOut ? 'Выходим...' : 'Выйти' }}
-          </button>
-        </template>
+        <RouterLink
+          v-if="authStore.isAuthenticated"
+          class="app-header__profile-btn"
+          :to="{ name: 'profile' }"
+          :aria-label="`Перейти в профиль ${authStore.displayName}`"
+          title="Профиль"
+        >
+          <span class="material-symbols-outlined">person</span>
+        </RouterLink>
 
         <RouterLink
           v-else
@@ -59,31 +66,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
 
-import { ApiError, useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '@/stores/auth'
+
+interface Props {
+  showSearch?: boolean
+  searchQuery?: string
+}
+
+withDefaults(defineProps<Props>(), {
+  showSearch: false,
+  searchQuery: '',
+})
+
+const emit = defineEmits<{
+  (event: 'update:searchQuery', value: string): void
+}>()
 
 const authStore = useAuthStore()
-const route = useRoute()
-const router = useRouter()
-const isLoggingOut = ref(false)
 
-const handleLogout = async () => {
-  try {
-    isLoggingOut.value = true
-    await authStore.logout()
-
-    if (route.name !== 'home') {
-      await router.push({ name: 'home' })
-    }
-  } catch (error) {
-    if (!(error instanceof ApiError)) {
-      console.error('Не удалось завершить сессию:', error)
-    }
-  } finally {
-    isLoggingOut.value = false
-  }
+const updateSearchQuery = (event: Event) => {
+  emit('update:searchQuery', (event.target as HTMLInputElement).value)
 }
 </script>
 
@@ -102,9 +106,9 @@ const handleLogout = async () => {
   min-height: 72px;
   margin: 0 auto;
   padding: 0 24px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
 }
 
@@ -120,7 +124,9 @@ const handleLogout = async () => {
 .app-header__nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 24px;
+  flex-wrap: wrap;
 }
 
 .app-header__link {
@@ -138,7 +144,38 @@ const handleLogout = async () => {
 .app-header__actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  flex-wrap: nowrap;
   gap: 12px;
+}
+
+.app-header__search {
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 220px;
+  gap: 10px;
+  width: 100%;
+  max-width: 280px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(0, 25, 68, 0.1);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #5f6b76;
+}
+
+.app-header__search input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #001944;
+}
+
+.app-header__search input::placeholder {
+  color: #7b8794;
 }
 
 .app-header__profile-btn {
@@ -180,24 +217,29 @@ const handleLogout = async () => {
   border-color: rgba(0, 25, 68, 0.24);
 }
 
-.app-header__login-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.app-header__logout-btn {
-  border: none;
-  background: #001944;
-  color: #ffffff;
-}
-
 @media (max-width: 768px) {
   .app-header__container {
-    padding: 0 16px;
+    display: flex;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 16px;
   }
 
   .app-header__nav {
-    display: none;
+    order: 3;
+    width: 100%;
+    gap: 16px;
+  }
+
+  .app-header__actions {
+    flex-basis: 100%;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .app-header__search {
+    width: 100%;
+    max-width: none;
   }
 }
 </style>

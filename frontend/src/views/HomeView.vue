@@ -5,10 +5,6 @@
       <section class="home-card">
         <span class="home-card__eyebrow">Three Eights Rent</span>
         <h1 class="home-card__title">Главная страница пока в разработке</h1>
-        <p class="home-card__text">
-          Это временная заглушка. Отсюда позже можно будет перейти к каталогу,
-          бронированию и личному кабинету.
-        </p>
 
         <div class="home-card__actions">
           <RouterLink
