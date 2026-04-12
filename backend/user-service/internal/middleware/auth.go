@@ -1,0 +1,60 @@
+package middleware
+
+import (
+	"context"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+)
+
+type contextKey string
+
+const (
+	userIDContextKey contextKey = "user_id"
+	headerUserID                = "X-User-ID"
+)
+
+func Auth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		headerValue := strings.TrimSpace(c.GetHeader(headerUserID))
+		if headerValue == "" {
+			abortUnauthorized(c, "trusted user identity header is required")
+			return
+		}
+
+		parsedUserID, err := strconv.ParseUint(headerValue, 10, 64)
+		if err != nil || parsedUserID == 0 {
+			abortUnauthorized(c, "trusted user identity header is invalid")
+			return
+		}
+
+		userID := uint(parsedUserID)
+		ctx := context.WithValue(c.Request.Context(), userIDContextKey, userID)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set(string(userIDContextKey), userID)
+		c.Next()
+	}
+}
+
+func UserIDFromContext(ctx context.Context) (uint, bool) {
+	userID, ok := ctx.Value(userIDContextKey).(uint)
+	return userID, ok && userID > 0
+}
+
+func UserIDFromGin(c *gin.Context) (uint, bool) {
+	userID, ok := c.Get(string(userIDContextKey))
+	if !ok {
+		return 0, false
+	}
+
+	typedUserID, ok := userID.(uint)
+	return typedUserID, ok && typedUserID > 0
+}
+
+func abortUnauthorized(c *gin.Context, message string) {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"error": message,
+	})
+}
