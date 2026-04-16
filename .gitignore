@@ -5,6 +5,9 @@ dist
 # Go
 bin
 *.exe
+.gocache/
+.gomodcache/
+.gotelemetry/
 
 # Env
 .env

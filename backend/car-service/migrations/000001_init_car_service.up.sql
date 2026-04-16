@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS cars (
+    id BIGSERIAL PRIMARY KEY,
+    brand VARCHAR(100) NOT NULL,
+    model VARCHAR(100) NOT NULL,
+    year INT NOT NULL,
+    registration_no VARCHAR(32) NOT NULL UNIQUE,
+    image_url VARCHAR(255),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
