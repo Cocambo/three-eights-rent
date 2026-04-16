@@ -35,12 +35,18 @@ func (h *CarHandler) List(c *gin.Context) {
 	response := make([]dto.CarResponse, 0, len(cars))
 	for _, car := range cars {
 		response = append(response, dto.CarResponse{
-			ID:             car.ID,
-			Brand:          car.Brand,
-			Model:          car.Model,
-			Year:           car.Year,
-			RegistrationNo: car.RegistrationNo,
-			ImageURL:       car.ImageURL,
+			ID:           car.ID,
+			Brand:        car.Brand,
+			Model:        car.Model,
+			Year:         car.Year,
+			FuelType:     car.FuelType,
+			Transmission: car.Transmission,
+			BodyType:     car.BodyType,
+			Color:        car.Color,
+			SeatsCount:   car.SeatsCount,
+			PricePerDay:  car.PricePerDay,
+			Purpose:      car.Purpose,
+			Description:  car.Description,
 		})
 	}
 

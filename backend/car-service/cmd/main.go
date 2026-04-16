@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"car-service/config"
+	"car-service/database"
 	"car-service/internal/handler"
 	"car-service/internal/middleware"
 	"car-service/internal/repository"
@@ -14,23 +16,34 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	ctx := context.Background()
 
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	gin.SetMode(cfg.Server.GinMode)
 
-	db, err := config.NewPostgresDB(ctx, cfg)
+	db, err := database.Open(ctx, cfg.DB)
 	if err != nil {
-		log.Fatalf("connect postgres: %v", err)
+		return fmt.Errorf("connect postgres: %w", err)
 	}
+	defer func() {
+		if err := database.Close(db); err != nil {
+			log.Printf("close postgres: %v", err)
+		}
+	}()
 
 	minioClient, err := config.NewMinIOClient(cfg)
 	if err != nil {
-		log.Fatalf("connect minio: %v", err)
+		return fmt.Errorf("connect minio: %w", err)
 	}
 
 	carRepository := repository.NewCarRepository(db)
@@ -47,6 +60,8 @@ func main() {
 	})
 
 	if err := router.Run(":" + cfg.Server.Port); err != nil {
-		log.Fatalf("run server: %v", err)
+		return fmt.Errorf("run server: %w", err)
 	}
+
+	return nil
 }

@@ -1,8 +1,11 @@
 package config
 
 import (
+	"car-service/database"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -10,7 +13,7 @@ import (
 type Config struct {
 	AppEnv string
 	Server ServerConfig
-	DB     DatabaseConfig
+	DB     database.Config
 	JWT    JWTConfig
 	MinIO  MinIOConfig
 }
@@ -18,16 +21,6 @@ type Config struct {
 type ServerConfig struct {
 	Port    string
 	GinMode string
-}
-
-type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
-	TimeZone string
 }
 
 type JWTConfig struct {
@@ -45,21 +38,18 @@ type MinIOConfig struct {
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
+	dbConfig, err := loadDatabaseConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &Config{
 		AppEnv: getEnv("APP_ENV", "development"),
 		Server: ServerConfig{
 			Port:    getEnv("SERVER_PORT", "8082"),
 			GinMode: getEnv("GIN_MODE", "debug"),
 		},
-		DB: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "5432"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", "postgres"),
-			Name:     getEnv("DB_NAME", "car_service"),
-			SSLMode:  getEnv("DB_SSLMODE", "disable"),
-			TimeZone: getEnv("DB_TIMEZONE", "UTC"),
-		},
+		DB: dbConfig,
 		JWT: JWTConfig{
 			AccessSecret: getEnv("JWT_ACCESS_SECRET", "dev-access-secret"),
 		},
@@ -76,7 +66,46 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("SERVER_PORT is required")
 	}
 
+	if err := cfg.DB.Validate(); err != nil {
+		return nil, fmt.Errorf("database config: %w", err)
+	}
+
 	return cfg, nil
+}
+
+func loadDatabaseConfig() (database.Config, error) {
+	maxIdleConns, err := getEnvAsInt("DB_MAX_IDLE_CONNS", 10)
+	if err != nil {
+		return database.Config{}, err
+	}
+
+	maxOpenConns, err := getEnvAsInt("DB_MAX_OPEN_CONNS", 25)
+	if err != nil {
+		return database.Config{}, err
+	}
+
+	connMaxLifetime, err := getEnvAsDuration("DB_CONN_MAX_LIFETIME", time.Hour)
+	if err != nil {
+		return database.Config{}, err
+	}
+
+	connMaxIdleTime, err := getEnvAsDuration("DB_CONN_MAX_IDLE_TIME", 15*time.Minute)
+	if err != nil {
+		return database.Config{}, err
+	}
+
+	return database.Config{
+		Host:            getEnv("DB_HOST", "localhost"),
+		Port:            getEnv("DB_PORT", "5432"),
+		User:            getEnv("DB_USER", "postgres"),
+		Password:        getEnv("DB_PASSWORD", "postgres"),
+		Name:            getEnv("DB_NAME", "car_service"),
+		SSLMode:         getEnv("DB_SSLMODE", "disable"),
+		MaxIdleConns:    maxIdleConns,
+		MaxOpenConns:    maxOpenConns,
+		ConnMaxLifetime: connMaxLifetime,
+		ConnMaxIdleTime: connMaxIdleTime,
+	}, nil
 }
 
 func getEnv(key, fallback string) string {
@@ -94,4 +123,32 @@ func getEnvAsBool(key string, fallback bool) bool {
 	}
 
 	return value == "true" || value == "1"
+}
+
+func getEnvAsInt(key string, fallback int) (int, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid integer: %w", key, err)
+	}
+
+	return parsed, nil
+}
+
+func getEnvAsDuration(key string, fallback time.Duration) (time.Duration, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid duration: %w", key, err)
+	}
+
+	return parsed, nil
 }
