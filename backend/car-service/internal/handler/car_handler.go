@@ -37,22 +37,19 @@ func (h *CarHandler) List(c *gin.Context) {
 		return
 	}
 
-	cars, err := h.carService.List(c.Request.Context())
+	cars, total, err := h.carService.List(c.Request.Context(), req)
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
-	total := int64(len(cars))
 	catalogItems := make([]dto.CarCatalogItemResponse, 0, len(cars))
 	for _, car := range cars {
 		catalogItems = append(catalogItems, toCarCatalogItemResponse(car))
 	}
 
-	items := paginateCatalogItems(catalogItems, req.OffsetValue(), req.LimitValue())
-
 	writeSuccess(c, http.StatusOK, dto.CarsCatalogResponse{
-		Items: items,
+		Items: catalogItems,
 		Pagination: dto.PaginationMeta{
 			Total:  total,
 			Limit:  req.LimitValue(),
@@ -132,17 +129,4 @@ func mainImageURL(images []domains.CarImage) string {
 	}
 
 	return images[0].ObjectKey
-}
-
-func paginateCatalogItems(items []dto.CarCatalogItemResponse, offset, limit int) []dto.CarCatalogItemResponse {
-	if offset >= len(items) {
-		return []dto.CarCatalogItemResponse{}
-	}
-
-	end := offset + limit
-	if end > len(items) {
-		end = len(items)
-	}
-
-	return items[offset:end]
 }
