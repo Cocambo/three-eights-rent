@@ -2,8 +2,11 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
+	"car-service/internal/domains"
 	"car-service/internal/dto"
+	apperrors "car-service/internal/errors"
 	"car-service/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -18,7 +21,7 @@ func NewCarHandler(carService service.CarService) *CarHandler {
 }
 
 func (h *CarHandler) Health(c *gin.Context) {
-	c.JSON(http.StatusOK, dto.HealthResponse{
+	writeSuccess(c, http.StatusOK, dto.HealthResponse{
 		Status: "ok",
 	})
 }
@@ -26,29 +29,47 @@ func (h *CarHandler) Health(c *gin.Context) {
 func (h *CarHandler) List(c *gin.Context) {
 	cars, err := h.carService.List(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to fetch cars",
-		})
+		writeError(c, err)
 		return
 	}
 
-	response := make([]dto.CarResponse, 0, len(cars))
+	items := make([]dto.CarResponse, 0, len(cars))
 	for _, car := range cars {
-		response = append(response, dto.CarResponse{
-			ID:           car.ID,
-			Brand:        car.Brand,
-			Model:        car.Model,
-			Year:         car.Year,
-			FuelType:     car.FuelType,
-			Transmission: car.Transmission,
-			BodyType:     car.BodyType,
-			Color:        car.Color,
-			SeatsCount:   car.SeatsCount,
-			PricePerDay:  car.PricePerDay,
-			Purpose:      car.Purpose,
-			Description:  car.Description,
-		})
+		items = append(items, toCarResponse(car))
 	}
 
-	c.JSON(http.StatusOK, response)
+	writeSuccess(c, http.StatusOK, items)
+}
+
+func (h *CarHandler) GetByID(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		writeError(c, apperrors.New(apperrors.ErrValidation, "invalid car id"))
+		return
+	}
+
+	car, err := h.carService.GetByID(c.Request.Context(), uint(id))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	writeSuccess(c, http.StatusOK, toCarResponse(car))
+}
+
+func toCarResponse(car domains.Car) dto.CarResponse {
+	return dto.CarResponse{
+		ID:           car.ID,
+		Brand:        car.Brand,
+		Model:        car.Model,
+		Year:         car.Year,
+		FuelType:     car.FuelType,
+		Transmission: car.Transmission,
+		BodyType:     car.BodyType,
+		Color:        car.Color,
+		SeatsCount:   car.SeatsCount,
+		PricePerDay:  car.PricePerDay,
+		Purpose:      car.Purpose,
+		Description:  car.Description,
+	}
 }

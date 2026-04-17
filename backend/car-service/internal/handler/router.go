@@ -36,5 +36,6 @@ func RegisterRoutes(router *gin.Engine, deps Dependencies) {
 	}
 	{
 		protected.GET("/cars", deps.CarHandler.List)
+		protected.GET("/cars/:id", deps.CarHandler.GetByID)
 	}
 }
