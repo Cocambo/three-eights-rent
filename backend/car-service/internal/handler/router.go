@@ -11,9 +11,10 @@ type JWTMiddleware interface {
 }
 
 type Dependencies struct {
-	CarHandler     *CarHandler
-	JWTMiddleware  JWTMiddleware
-	MinIOAvailable bool
+	CarHandler      *CarHandler
+	FavoriteHandler *FavoriteHandler
+	JWTMiddleware   JWTMiddleware
+	MinIOAvailable  bool
 }
 
 func RegisterRoutes(router *gin.Engine, deps Dependencies) {
@@ -37,5 +38,8 @@ func RegisterRoutes(router *gin.Engine, deps Dependencies) {
 	{
 		protected.GET("/cars", deps.CarHandler.List)
 		protected.GET("/cars/:id", deps.CarHandler.GetByID)
+		protected.GET("/favorites", deps.FavoriteHandler.List)
+		protected.POST("/favorites/:carId", deps.FavoriteHandler.Add)
+		protected.DELETE("/favorites/:carId", deps.FavoriteHandler.Remove)
 	}
 }

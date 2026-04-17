@@ -5,7 +5,6 @@ import (
 
 	"car-service/internal/domains"
 	"car-service/internal/dto"
-	apperrors "car-service/internal/errors"
 	"car-service/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -31,29 +30,40 @@ func (h *CarHandler) List(c *gin.Context) {
 		return
 	}
 
-	req.Normalize()
-	if err := req.Validate(); err != nil {
-		writeError(c, apperrors.New(apperrors.ErrValidation, err.Error()))
-		return
-	}
-
-	cars, total, err := h.carService.List(c.Request.Context(), req)
+	catalog, err := h.carService.GetCatalog(c.Request.Context(), service.CatalogFilter{
+		Search:       req.Q,
+		Brand:        req.Brand,
+		Model:        req.Model,
+		YearFrom:     req.YearFrom,
+		YearTo:       req.YearTo,
+		FuelType:     req.FuelType,
+		Transmission: req.Transmission,
+		BodyType:     req.BodyType,
+		SeatsMin:     req.SeatsMin,
+		PriceMin:     req.PriceMin,
+		PriceMax:     req.PriceMax,
+		Purpose:      req.Purpose,
+		SortBy:       req.SortBy,
+		SortOrder:    req.SortOrder,
+		Limit:        req.Limit,
+		Offset:       req.Offset,
+	})
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 
-	catalogItems := make([]dto.CarCatalogItemResponse, 0, len(cars))
-	for _, car := range cars {
+	catalogItems := make([]dto.CarCatalogItemResponse, 0, len(catalog.Items))
+	for _, car := range catalog.Items {
 		catalogItems = append(catalogItems, toCarCatalogItemResponse(car))
 	}
 
 	writeSuccess(c, http.StatusOK, dto.CarsCatalogResponse{
 		Items: catalogItems,
 		Pagination: dto.PaginationMeta{
-			Total:  total,
-			Limit:  req.LimitValue(),
-			Offset: req.OffsetValue(),
+			Total:  catalog.Total,
+			Limit:  catalog.Limit,
+			Offset: catalog.Offset,
 		},
 	})
 }
@@ -64,7 +74,7 @@ func (h *CarHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	car, err := h.carService.GetByID(c.Request.Context(), req.ID)
+	car, err := h.carService.GetCarDetails(c.Request.Context(), req.ID)
 	if err != nil {
 		writeError(c, err)
 		return
@@ -117,16 +127,11 @@ func toCarDetailsResponse(car domains.Car) dto.CarDetailsResponse {
 	}
 }
 
-func mainImageURL(images []domains.CarImage) string {
-	for _, image := range images {
-		if image.IsMain {
-			return image.ObjectKey
-		}
-	}
-
+func mainImageURL(images []domains.CarImage) *string {
 	if len(images) == 0 {
-		return ""
+		return nil
 	}
 
-	return images[0].ObjectKey
+	url := images[0].ObjectKey
+	return &url
 }

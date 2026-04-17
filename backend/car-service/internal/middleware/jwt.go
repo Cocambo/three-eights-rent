@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -9,8 +11,18 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+type contextKey string
+
+const userIDContextKey contextKey = "user_id"
+
 type JWTMiddleware struct {
 	accessSecret string
+}
+
+type tokenClaims struct {
+	TokenType string `json:"token_type"`
+	UserID    uint   `json:"user_id"`
+	jwt.RegisteredClaims
 }
 
 func NewJWTMiddleware(accessSecret string) *JWTMiddleware {
@@ -27,7 +39,12 @@ func (m *JWTMiddleware) Handler() gin.HandlerFunc {
 			return
 		}
 
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		claims := &tokenClaims{}
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("unexpected signing method")
+			}
+
 			return []byte(m.accessSecret), nil
 		})
 		if err != nil || !token.Valid {
@@ -37,8 +54,41 @@ func (m *JWTMiddleware) Handler() gin.HandlerFunc {
 			return
 		}
 
+		if claims.TokenType != "access" || claims.UserID == 0 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid token",
+			})
+			return
+		}
+
+		if claims.Subject != "" && claims.Subject != fmt.Sprintf("%d", claims.UserID) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error": "invalid token",
+			})
+			return
+		}
+
+		ctx := context.WithValue(c.Request.Context(), userIDContextKey, claims.UserID)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set(string(userIDContextKey), claims.UserID)
+
 		c.Next()
 	}
+}
+
+func UserIDFromContext(ctx context.Context) (uint, bool) {
+	userID, ok := ctx.Value(userIDContextKey).(uint)
+	return userID, ok && userID > 0
+}
+
+func UserIDFromGin(c *gin.Context) (uint, bool) {
+	userID, ok := c.Get(string(userIDContextKey))
+	if !ok {
+		return 0, false
+	}
+
+	typedUserID, ok := userID.(uint)
+	return typedUserID, ok && typedUserID > 0
 }
 
 func extractBearerToken(header string) (string, error) {

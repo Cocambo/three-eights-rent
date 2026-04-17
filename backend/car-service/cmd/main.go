@@ -47,16 +47,20 @@ func run() error {
 	}
 
 	carRepository := repository.NewCarRepository(db)
+	favoriteRepository := repository.NewFavoriteRepository(db)
 	carService := service.NewCarService(carRepository)
+	favoriteService := service.NewFavoriteService(favoriteRepository, carRepository)
 	carHandler := handler.NewCarHandler(carService)
+	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	jwtMiddleware := middleware.NewJWTMiddleware(cfg.JWT.AccessSecret)
 
 	router := gin.New()
 	middleware.Setup(router)
 	handler.RegisterRoutes(router, handler.Dependencies{
-		CarHandler:     carHandler,
-		JWTMiddleware:  jwtMiddleware,
-		MinIOAvailable: minioClient != nil,
+		CarHandler:      carHandler,
+		FavoriteHandler: favoriteHandler,
+		JWTMiddleware:   jwtMiddleware,
+		MinIOAvailable:  minioClient != nil,
 	})
 
 	if err := router.Run(":" + cfg.Server.Port); err != nil {
