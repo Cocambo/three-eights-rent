@@ -1,13 +1,19 @@
 package handler
 
 import (
+	"errors"
+	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"car-service/internal/dto"
+	apperrors "car-service/internal/errors"
 	"car-service/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
+
+const maxCarImageMultipartRequestSize int64 = 12 << 20
 
 type CarHandler struct {
 	carService service.CarService
@@ -68,4 +74,57 @@ func (h *CarHandler) GetByID(c *gin.Context) {
 	}
 
 	writeSuccess(c, http.StatusOK, toCarDetailsResponse(car))
+}
+
+func (h *CarHandler) UploadImage(c *gin.Context) {
+	var uri dto.GetCarByIDURI
+	if !bindURI(c, &uri) {
+		return
+	}
+
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxCarImageMultipartRequestSize)
+
+	var form dto.UploadCarImageForm
+	if !bindForm(c, &form) {
+		return
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		writeError(c, mapUploadFileError(err))
+		return
+	}
+
+	uploadedImage, err := h.carService.UploadCarImage(c.Request.Context(), service.UploadCarImageCommand{
+		CarID:      uri.ID,
+		FileHeader: fileHeader,
+		IsMain:     form.IsMain,
+		SortOrder:  form.SortOrder,
+	})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	writeSuccess(c, http.StatusCreated, toUploadedCarImageResponse(uploadedImage))
+}
+
+func mapUploadFileError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "http: request body too large") {
+		return apperrors.New(apperrors.ErrValidation, "request body is too large")
+	}
+
+	if errors.Is(err, multipart.ErrMessageTooLarge) {
+		return apperrors.New(apperrors.ErrValidation, "request body is too large")
+	}
+
+	if errors.Is(err, http.ErrMissingFile) {
+		return apperrors.New(apperrors.ErrValidation, "file is required")
+	}
+
+	return apperrors.New(apperrors.ErrValidation, err.Error())
 }

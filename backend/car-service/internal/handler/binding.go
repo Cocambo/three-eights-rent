@@ -28,6 +28,15 @@ func bindURI(c *gin.Context, dst any) bool {
 	return true
 }
 
+func bindForm(c *gin.Context, dst any) bool {
+	if err := c.ShouldBind(dst); err != nil {
+		writeError(c, apperrors.New(apperrors.ErrValidation, formatBindingError(err)))
+		return false
+	}
+
+	return true
+}
+
 func formatBindingError(err error) string {
 	var validationErrs validator.ValidationErrors
 	if errors.As(err, &validationErrs) && len(validationErrs) > 0 {
@@ -48,6 +57,10 @@ func formatBindingError(err error) string {
 		default:
 			return field + " is invalid"
 		}
+	}
+
+	if strings.Contains(err.Error(), "http: request body too large") {
+		return "request body is too large"
 	}
 
 	return err.Error()

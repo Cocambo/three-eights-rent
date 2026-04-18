@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -11,7 +12,20 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
+type StoredObject struct {
+	BucketName string
+	ObjectKey  string
+}
+
 type ImageStorageService interface {
+	UploadObject(
+		ctx context.Context,
+		bucketName, objectKey string,
+		reader io.Reader,
+		size int64,
+		contentType string,
+	) (StoredObject, error)
+	RemoveObject(ctx context.Context, bucketName, objectKey string) error
 	GeneratePresignedGetURL(ctx context.Context, bucketName, objectKey string) (string, error)
 }
 
@@ -29,22 +43,70 @@ func NewMinIOImageStorageService(client *minio.Client, cfg config.MinIOConfig) I
 	}
 }
 
+func (s *minioImageStorageService) UploadObject(
+	ctx context.Context,
+	bucketName, objectKey string,
+	reader io.Reader,
+	size int64,
+	contentType string,
+) (StoredObject, error) {
+	resolvedBucket, resolvedObjectKey, err := s.resolveLocation(bucketName, objectKey)
+	if err != nil {
+		return StoredObject{}, err
+	}
+
+	if size < 0 {
+		return StoredObject{}, fmt.Errorf("object size must be greater than or equal to zero")
+	}
+
+	_, err = s.client.PutObject(
+		ctx,
+		resolvedBucket,
+		resolvedObjectKey,
+		reader,
+		size,
+		minio.PutObjectOptions{
+			ContentType: strings.TrimSpace(contentType),
+		},
+	)
+	if err != nil {
+		return StoredObject{}, fmt.Errorf("put object %s/%s: %w", resolvedBucket, resolvedObjectKey, err)
+	}
+
+	return StoredObject{
+		BucketName: resolvedBucket,
+		ObjectKey:  resolvedObjectKey,
+	}, nil
+}
+
+func (s *minioImageStorageService) RemoveObject(
+	ctx context.Context,
+	bucketName, objectKey string,
+) error {
+	resolvedBucket, resolvedObjectKey, err := s.resolveLocation(bucketName, objectKey)
+	if err != nil {
+		return err
+	}
+
+	if err := s.client.RemoveObject(
+		ctx,
+		resolvedBucket,
+		resolvedObjectKey,
+		minio.RemoveObjectOptions{},
+	); err != nil {
+		return fmt.Errorf("remove object %s/%s: %w", resolvedBucket, resolvedObjectKey, err)
+	}
+
+	return nil
+}
+
 func (s *minioImageStorageService) GeneratePresignedGetURL(
 	ctx context.Context,
 	bucketName, objectKey string,
 ) (string, error) {
-	resolvedBucket := strings.TrimSpace(bucketName)
-	if resolvedBucket == "" {
-		resolvedBucket = s.defaultBucket
-	}
-
-	resolvedObjectKey := strings.TrimSpace(objectKey)
-	if resolvedBucket == "" {
-		return "", fmt.Errorf("bucket name is required")
-	}
-
-	if resolvedObjectKey == "" {
-		return "", fmt.Errorf("object key is required")
+	resolvedBucket, resolvedObjectKey, err := s.resolveLocation(bucketName, objectKey)
+	if err != nil {
+		return "", err
 	}
 
 	presignedURL, err := s.client.PresignedGetObject(
@@ -59,4 +121,24 @@ func (s *minioImageStorageService) GeneratePresignedGetURL(
 	}
 
 	return presignedURL.String(), nil
+}
+
+func (s *minioImageStorageService) resolveLocation(
+	bucketName, objectKey string,
+) (string, string, error) {
+	resolvedBucket := strings.TrimSpace(bucketName)
+	if resolvedBucket == "" {
+		resolvedBucket = s.defaultBucket
+	}
+
+	resolvedObjectKey := strings.TrimSpace(objectKey)
+	if resolvedBucket == "" {
+		return "", "", fmt.Errorf("bucket name is required")
+	}
+
+	if resolvedObjectKey == "" {
+		return "", "", fmt.Errorf("object key is required")
+	}
+
+	return resolvedBucket, resolvedObjectKey, nil
 }

@@ -1,5 +1,7 @@
 package dto
 
+import "time"
+
 type HealthResponse struct {
 	Status string `json:"status"`
 }
@@ -33,11 +35,27 @@ type GetCarByIDURI struct {
 	ID uint `uri:"id" binding:"required,gt=0"`
 }
 
+type UploadCarImageForm struct {
+	IsMain    bool `form:"is_main"`
+	SortOrder int  `form:"sort_order" binding:"omitempty,gte=0"`
+}
+
 type CarImageResponse struct {
 	ID        uint   `json:"id"`
 	URL       string `json:"url"`
 	IsMain    bool   `json:"is_main"`
 	SortOrder int    `json:"sort_order"`
+}
+
+type UploadedCarImageResponse struct {
+	ID          uint      `json:"id"`
+	CarID       uint      `json:"car_id"`
+	FileName    string    `json:"file_name"`
+	ContentType string    `json:"content_type"`
+	FileSize    int64     `json:"file_size"`
+	IsMain      bool      `json:"is_main"`
+	SortOrder   int       `json:"sort_order"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type CarCatalogItemResponse struct {

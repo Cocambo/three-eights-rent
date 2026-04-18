@@ -2,9 +2,17 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"car-service/internal/domains"
 	apperrors "car-service/internal/errors"
@@ -17,6 +25,7 @@ const (
 	maxCatalogLimit         = 100
 	defaultCatalogSortBy    = "id"
 	defaultCatalogSortOrder = "desc"
+	maxCarImageFileSize     = 10 << 20
 )
 
 var allowedCatalogSortFields = map[string]struct{}{
@@ -24,6 +33,12 @@ var allowedCatalogSortFields = map[string]struct{}{
 	"year":          {},
 	"price_per_day": {},
 	"created_at":    {},
+}
+
+var allowedCarImageContentTypes = map[string]string{
+	"image/jpeg": ".jpg",
+	"image/png":  ".png",
+	"image/webp": ".webp",
 }
 
 type CatalogFilter struct {
@@ -89,9 +104,28 @@ type CarDetailsResult struct {
 	Images       []CarImageResult
 }
 
+type UploadCarImageCommand struct {
+	CarID      uint
+	FileHeader *multipart.FileHeader
+	IsMain     bool
+	SortOrder  int
+}
+
+type UploadedCarImageResult struct {
+	ID          uint
+	CarID       uint
+	FileName    string
+	ContentType string
+	FileSize    int64
+	IsMain      bool
+	SortOrder   int
+	CreatedAt   time.Time
+}
+
 type CarService interface {
 	GetCatalog(ctx context.Context, filter CatalogFilter) (CatalogResult, error)
 	GetCarDetails(ctx context.Context, carID uint) (CarDetailsResult, error)
+	UploadCarImage(ctx context.Context, command UploadCarImageCommand) (UploadedCarImageResult, error)
 }
 
 type carService struct {
@@ -199,6 +233,101 @@ func (s *carService) GetCarDetails(ctx context.Context, carID uint) (CarDetailsR
 	sortCarImages(car.CarImages)
 
 	return toCarDetails(ctx, s.imageStorage, car)
+}
+
+func (s *carService) UploadCarImage(
+	ctx context.Context,
+	command UploadCarImageCommand,
+) (UploadedCarImageResult, error) {
+	if command.CarID == 0 {
+		return UploadedCarImageResult{}, validationError("car_id must be greater than zero")
+	}
+
+	if command.FileHeader == nil {
+		return UploadedCarImageResult{}, validationError("file is required")
+	}
+
+	if command.SortOrder < 0 {
+		return UploadedCarImageResult{}, validationError("sort_order must be greater than or equal to zero")
+	}
+
+	if command.FileHeader.Size <= 0 {
+		return UploadedCarImageResult{}, validationError("file must not be empty")
+	}
+
+	if command.FileHeader.Size > maxCarImageFileSize {
+		return UploadedCarImageResult{}, validationError("file is too large")
+	}
+
+	exists, err := s.carRepository.ExistsByID(ctx, command.CarID)
+	if err != nil {
+		return UploadedCarImageResult{}, err
+	}
+
+	if !exists {
+		return UploadedCarImageResult{}, apperrors.New(apperrors.ErrNotFound, "car not found")
+	}
+
+	contentType, extension, err := detectCarImageContentType(command.FileHeader)
+	if err != nil {
+		return UploadedCarImageResult{}, err
+	}
+
+	objectKey, err := generateCarImageObjectKey(command.CarID, extension)
+	if err != nil {
+		return UploadedCarImageResult{}, fmt.Errorf("generate object key: %w", err)
+	}
+
+	file, err := command.FileHeader.Open()
+	if err != nil {
+		return UploadedCarImageResult{}, fmt.Errorf("open uploaded file: %w", err)
+	}
+	defer file.Close()
+
+	storedObject, err := s.imageStorage.UploadObject(
+		ctx,
+		"",
+		objectKey,
+		file,
+		command.FileHeader.Size,
+		contentType,
+	)
+	if err != nil {
+		return UploadedCarImageResult{}, fmt.Errorf("upload car image to storage: %w", err)
+	}
+
+	image, err := s.carRepository.CreateImage(ctx, repository.CreateCarImageParams{
+		CarID:       command.CarID,
+		BucketName:  storedObject.BucketName,
+		ObjectKey:   storedObject.ObjectKey,
+		FileName:    normalizeUploadedFileName(command.FileHeader.Filename, extension),
+		ContentType: contentType,
+		FileSize:    command.FileHeader.Size,
+		IsMain:      command.IsMain,
+		SortOrder:   command.SortOrder,
+	})
+	if err != nil {
+		cleanupErr := s.imageStorage.RemoveObject(ctx, storedObject.BucketName, storedObject.ObjectKey)
+		if cleanupErr != nil {
+			return UploadedCarImageResult{}, errors.Join(
+				fmt.Errorf("save car image metadata: %w", err),
+				fmt.Errorf("cleanup orphaned object %s/%s: %w", storedObject.BucketName, storedObject.ObjectKey, cleanupErr),
+			)
+		}
+
+		return UploadedCarImageResult{}, err
+	}
+
+	return UploadedCarImageResult{
+		ID:          image.ID,
+		CarID:       image.CarID,
+		FileName:    image.FileName,
+		ContentType: image.ContentType,
+		FileSize:    image.FileSize,
+		IsMain:      image.IsMain,
+		SortOrder:   image.SortOrder,
+		CreatedAt:   image.CreatedAt,
+	}, nil
 }
 
 func normalizeCatalogFilter(filter CatalogFilter) (normalizedCatalogFilter, error) {
@@ -427,4 +556,62 @@ func mainImageURL(
 
 func validationError(message string) error {
 	return apperrors.New(apperrors.ErrValidation, message)
+}
+
+func detectCarImageContentType(fileHeader *multipart.FileHeader) (string, string, error) {
+	file, err := fileHeader.Open()
+	if err != nil {
+		return "", "", fmt.Errorf("open uploaded file for content type detection: %w", err)
+	}
+	defer file.Close()
+
+	buffer := make([]byte, 512)
+	bytesRead, err := file.Read(buffer)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", "", fmt.Errorf("read uploaded file header: %w", err)
+	}
+
+	contentType := http.DetectContentType(buffer[:bytesRead])
+	extension, ok := allowedCarImageContentTypes[contentType]
+	if !ok {
+		return "", "", validationError("file content_type has invalid value")
+	}
+
+	return contentType, extension, nil
+}
+
+func generateCarImageObjectKey(carID uint, extension string) (string, error) {
+	randomSuffix, err := randomHex(16)
+	if err != nil {
+		return "", err
+	}
+
+	now := time.Now().UTC()
+	return fmt.Sprintf(
+		"cars/%d/%04d/%02d/%02d/%s%s",
+		carID,
+		now.Year(),
+		now.Month(),
+		now.Day(),
+		randomSuffix,
+		extension,
+	), nil
+}
+
+func normalizeUploadedFileName(fileName, fallbackExtension string) string {
+	baseName := strings.TrimSpace(filepath.Base(fileName))
+	if baseName == "" || baseName == "." {
+		return "image" + fallbackExtension
+	}
+
+	return baseName
+}
+
+func randomHex(size int) (string, error) {
+	buffer := make([]byte, size)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", fmt.Errorf("generate random bytes: %w", err)
+	}
+
+	return hex.EncodeToString(buffer), nil
 }

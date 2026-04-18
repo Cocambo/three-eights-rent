@@ -65,6 +65,19 @@ func toCarDetailsResponse(result service.CarDetailsResult) dto.CarDetailsRespons
 	}
 }
 
+func toUploadedCarImageResponse(result service.UploadedCarImageResult) dto.UploadedCarImageResponse {
+	return dto.UploadedCarImageResponse{
+		ID:          result.ID,
+		CarID:       result.CarID,
+		FileName:    result.FileName,
+		ContentType: result.ContentType,
+		FileSize:    result.FileSize,
+		IsMain:      result.IsMain,
+		SortOrder:   result.SortOrder,
+		CreatedAt:   result.CreatedAt,
+	}
+}
+
 func toListFavoritesResponse(items []service.FavoriteItem) dto.ListFavoritesResponse {
 	responseItems := make([]dto.FavoriteResponse, 0, len(items))
 	for _, item := range items {

@@ -30,11 +30,23 @@ type CarFilter struct {
 	Offset       int
 }
 
+type CreateCarImageParams struct {
+	CarID       uint
+	BucketName  string
+	ObjectKey   string
+	FileName    string
+	ContentType string
+	FileSize    int64
+	IsMain      bool
+	SortOrder   int
+}
+
 type CarRepository interface {
 	List(ctx context.Context, filter CarFilter) ([]domains.Car, error)
 	Count(ctx context.Context, filter CarFilter) (int64, error)
 	GetByID(ctx context.Context, id uint) (domains.Car, error)
 	ExistsByID(ctx context.Context, id uint) (bool, error)
+	CreateImage(ctx context.Context, params CreateCarImageParams) (domains.CarImage, error)
 }
 
 type gormCarRepository struct {
@@ -134,6 +146,39 @@ func (r *gormCarRepository) ExistsByID(ctx context.Context, id uint) (bool, erro
 	default:
 		return false, mapRepositoryError(err, "car not found")
 	}
+}
+
+func (r *gormCarRepository) CreateImage(
+	ctx context.Context,
+	params CreateCarImageParams,
+) (domains.CarImage, error) {
+	image := domains.CarImage{
+		CarID:       params.CarID,
+		BucketName:  params.BucketName,
+		ObjectKey:   params.ObjectKey,
+		FileName:    params.FileName,
+		ContentType: params.ContentType,
+		FileSize:    params.FileSize,
+		IsMain:      params.IsMain,
+		SortOrder:   params.SortOrder,
+	}
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if params.IsMain {
+			if err := tx.Model(&domains.CarImage{}).
+				Where("car_id = ? AND is_main = ?", params.CarID, true).
+				Update("is_main", false).Error; err != nil {
+				return err
+			}
+		}
+
+		return tx.Create(&image).Error
+	})
+	if err != nil {
+		return domains.CarImage{}, mapRepositoryError(err, "car image not saved")
+	}
+
+	return image, nil
 }
 
 func carCatalogSelect() []string {
