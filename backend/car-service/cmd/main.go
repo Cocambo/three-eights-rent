@@ -51,7 +51,7 @@ func run() error {
 	carRepository := repository.NewCarRepository(db)
 	favoriteRepository := repository.NewFavoriteRepository(db)
 	carService := service.NewCarService(carRepository, imageStorage)
-	favoriteService := service.NewFavoriteService(favoriteRepository, carRepository)
+	favoriteService := service.NewFavoriteService(favoriteRepository, carRepository, imageStorage)
 	carHandler := handler.NewCarHandler(carService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	jwtMiddleware := middleware.NewJWTMiddleware(cfg.JWT.AccessSecret)

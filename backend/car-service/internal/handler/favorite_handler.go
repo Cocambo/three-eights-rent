@@ -20,6 +20,11 @@ func NewFavoriteHandler(favoriteService service.FavoriteService) *FavoriteHandle
 }
 
 func (h *FavoriteHandler) List(c *gin.Context) {
+	var req dto.ListFavoritesQuery
+	if !bindQuery(c, &req) {
+		return
+	}
+
 	userID, ok := middleware.UserIDFromGin(c)
 	if !ok {
 		writeError(c, serviceUnauthorizedError())
@@ -32,16 +37,7 @@ func (h *FavoriteHandler) List(c *gin.Context) {
 		return
 	}
 
-	response := make([]dto.FavoriteResponse, 0, len(favorites))
-	for _, favorite := range favorites {
-		response = append(response, dto.FavoriteResponse{
-			CarID:   favorite.CarID,
-			AddedAt: favorite.CreatedAt,
-			Car:     toCarCatalogItemResponse(favorite.Car),
-		})
-	}
-
-	writeSuccess(c, http.StatusOK, response)
+	writeSuccess(c, http.StatusOK, toListFavoritesResponse(favorites))
 }
 
 func (h *FavoriteHandler) Add(c *gin.Context) {
@@ -61,7 +57,10 @@ func (h *FavoriteHandler) Add(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	writeSuccess(c, http.StatusOK, dto.FavoriteMutationResponse{
+		CarID:   req.CarID,
+		Message: "car added to favorites",
+	})
 }
 
 func (h *FavoriteHandler) Remove(c *gin.Context) {
@@ -81,7 +80,10 @@ func (h *FavoriteHandler) Remove(c *gin.Context) {
 		return
 	}
 
-	c.Status(http.StatusNoContent)
+	writeSuccess(c, http.StatusOK, dto.FavoriteMutationResponse{
+		CarID:   req.CarID,
+		Message: "car removed from favorites",
+	})
 }
 
 func serviceUnauthorizedError() error {

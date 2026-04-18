@@ -52,7 +52,7 @@ func (h *CarHandler) List(c *gin.Context) {
 		return
 	}
 
-	writeSuccess(c, http.StatusOK, catalog)
+	writeSuccess(c, http.StatusOK, toCarsCatalogResponse(catalog))
 }
 
 func (h *CarHandler) GetByID(c *gin.Context) {
@@ -67,5 +67,5 @@ func (h *CarHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	writeSuccess(c, http.StatusOK, car)
+	writeSuccess(c, http.StatusOK, toCarDetailsResponse(car))
 }

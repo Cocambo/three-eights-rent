@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"car-service/internal/domains"
-	"car-service/internal/dto"
 	apperrors "car-service/internal/errors"
 	"car-service/internal/repository"
 	"car-service/internal/storage"
@@ -46,9 +45,53 @@ type CatalogFilter struct {
 	Offset       *int
 }
 
+type CatalogCar struct {
+	ID           uint
+	Brand        string
+	Model        string
+	Year         int
+	FuelType     string
+	Transmission string
+	BodyType     string
+	SeatsCount   int
+	PricePerDay  int64
+	Purpose      string
+	MainImageURL *string
+}
+
+type CatalogResult struct {
+	Items  []CatalogCar
+	Total  int64
+	Limit  int
+	Offset int
+}
+
+type CarImageResult struct {
+	ID        uint
+	URL       string
+	IsMain    bool
+	SortOrder int
+}
+
+type CarDetailsResult struct {
+	ID           uint
+	Brand        string
+	Model        string
+	Year         int
+	FuelType     string
+	Transmission string
+	BodyType     string
+	Color        string
+	SeatsCount   int
+	PricePerDay  int64
+	Purpose      string
+	Description  string
+	Images       []CarImageResult
+}
+
 type CarService interface {
-	GetCatalog(ctx context.Context, filter CatalogFilter) (dto.CarsCatalogResponse, error)
-	GetCarDetails(ctx context.Context, carID uint) (dto.CarDetailsResponse, error)
+	GetCatalog(ctx context.Context, filter CatalogFilter) (CatalogResult, error)
+	GetCarDetails(ctx context.Context, carID uint) (CarDetailsResult, error)
 }
 
 type carService struct {
@@ -88,10 +131,10 @@ func NewCarService(
 func (s *carService) GetCatalog(
 	ctx context.Context,
 	filter CatalogFilter,
-) (dto.CarsCatalogResponse, error) {
+) (CatalogResult, error) {
 	normalized, err := normalizeCatalogFilter(filter)
 	if err != nil {
-		return dto.CarsCatalogResponse{}, err
+		return CatalogResult{}, err
 	}
 
 	repositoryFilter := repository.CarFilter{
@@ -115,49 +158,47 @@ func (s *carService) GetCatalog(
 
 	total, err := s.carRepository.Count(ctx, repositoryFilter)
 	if err != nil {
-		return dto.CarsCatalogResponse{}, err
+		return CatalogResult{}, err
 	}
 
 	cars, err := s.carRepository.List(ctx, repositoryFilter)
 	if err != nil {
-		return dto.CarsCatalogResponse{}, err
+		return CatalogResult{}, err
 	}
 
-	items := make([]dto.CarCatalogItemResponse, 0, len(cars))
+	items := make([]CatalogCar, 0, len(cars))
 	for i := range cars {
 		cars[i].CarImages = catalogImages(cars[i].CarImages)
 
-		item, err := s.toCarCatalogItemResponse(ctx, cars[i])
+		item, err := toCatalogCar(ctx, s.imageStorage, cars[i])
 		if err != nil {
-			return dto.CarsCatalogResponse{}, err
+			return CatalogResult{}, err
 		}
 
 		items = append(items, item)
 	}
 
-	return dto.CarsCatalogResponse{
-		Items: items,
-		Pagination: dto.PaginationMeta{
-			Total:  total,
-			Limit:  normalized.Limit,
-			Offset: normalized.Offset,
-		},
+	return CatalogResult{
+		Items:  items,
+		Total:  total,
+		Limit:  normalized.Limit,
+		Offset: normalized.Offset,
 	}, nil
 }
 
-func (s *carService) GetCarDetails(ctx context.Context, carID uint) (dto.CarDetailsResponse, error) {
+func (s *carService) GetCarDetails(ctx context.Context, carID uint) (CarDetailsResult, error) {
 	if carID == 0 {
-		return dto.CarDetailsResponse{}, validationError("car_id must be greater than zero")
+		return CarDetailsResult{}, validationError("car_id must be greater than zero")
 	}
 
 	car, err := s.carRepository.GetByID(ctx, carID)
 	if err != nil {
-		return dto.CarDetailsResponse{}, err
+		return CarDetailsResult{}, err
 	}
 
 	sortCarImages(car.CarImages)
 
-	return s.toCarDetailsResponse(ctx, car)
+	return toCarDetails(ctx, s.imageStorage, car)
 }
 
 func normalizeCatalogFilter(filter CatalogFilter) (normalizedCatalogFilter, error) {
@@ -296,16 +337,17 @@ func sortCarImages(images []domains.CarImage) {
 	})
 }
 
-func (s *carService) toCarCatalogItemResponse(
+func toCatalogCar(
 	ctx context.Context,
+	imageStorage storage.ImageStorageService,
 	car domains.Car,
-) (dto.CarCatalogItemResponse, error) {
-	mainImageURL, err := s.mainImageURL(ctx, car.CarImages)
+) (CatalogCar, error) {
+	mainImageURL, err := mainImageURL(ctx, imageStorage, car.CarImages)
 	if err != nil {
-		return dto.CarCatalogItemResponse{}, err
+		return CatalogCar{}, err
 	}
 
-	return dto.CarCatalogItemResponse{
+	return CatalogCar{
 		ID:           car.ID,
 		Brand:        car.Brand,
 		Model:        car.Model,
@@ -320,15 +362,16 @@ func (s *carService) toCarCatalogItemResponse(
 	}, nil
 }
 
-func (s *carService) toCarDetailsResponse(
+func toCarDetails(
 	ctx context.Context,
+	imageStorage storage.ImageStorageService,
 	car domains.Car,
-) (dto.CarDetailsResponse, error) {
-	images := make([]dto.CarImageResponse, 0, len(car.CarImages))
+) (CarDetailsResult, error) {
+	images := make([]CarImageResult, 0, len(car.CarImages))
 	for _, image := range car.CarImages {
-		presignedURL, err := s.imageStorage.GeneratePresignedGetURL(ctx, image.BucketName, image.ObjectKey)
+		presignedURL, err := imageStorage.GeneratePresignedGetURL(ctx, image.BucketName, image.ObjectKey)
 		if err != nil {
-			return dto.CarDetailsResponse{}, fmt.Errorf(
+			return CarDetailsResult{}, fmt.Errorf(
 				"generate image url for car %d image %d: %w",
 				car.ID,
 				image.ID,
@@ -336,7 +379,7 @@ func (s *carService) toCarDetailsResponse(
 			)
 		}
 
-		images = append(images, dto.CarImageResponse{
+		images = append(images, CarImageResult{
 			ID:        image.ID,
 			URL:       presignedURL,
 			IsMain:    image.IsMain,
@@ -344,7 +387,7 @@ func (s *carService) toCarDetailsResponse(
 		})
 	}
 
-	return dto.CarDetailsResponse{
+	return CarDetailsResult{
 		ID:           car.ID,
 		Brand:        car.Brand,
 		Model:        car.Model,
@@ -361,12 +404,16 @@ func (s *carService) toCarDetailsResponse(
 	}, nil
 }
 
-func (s *carService) mainImageURL(ctx context.Context, images []domains.CarImage) (*string, error) {
+func mainImageURL(
+	ctx context.Context,
+	imageStorage storage.ImageStorageService,
+	images []domains.CarImage,
+) (*string, error) {
 	if len(images) == 0 {
 		return nil, nil
 	}
 
-	presignedURL, err := s.imageStorage.GeneratePresignedGetURL(
+	presignedURL, err := imageStorage.GeneratePresignedGetURL(
 		ctx,
 		images[0].BucketName,
 		images[0].ObjectKey,

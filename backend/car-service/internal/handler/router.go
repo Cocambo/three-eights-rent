@@ -7,7 +7,7 @@ import (
 )
 
 type JWTMiddleware interface {
-	Handler() gin.HandlerFunc
+	JWTAuthMiddleware() gin.HandlerFunc
 }
 
 type Dependencies struct {
@@ -31,15 +31,19 @@ func RegisterRoutes(router *gin.Engine, deps Dependencies) {
 		})
 	}
 
-	protected := router.Group("/api/v1")
+	public := api.Group("")
+	{
+		public.GET("/cars", deps.CarHandler.List)
+		public.GET("/cars/:id", deps.CarHandler.GetByID)
+	}
+
+	favorites := api.Group("/favorites")
 	if deps.JWTMiddleware != nil {
-		protected.Use(deps.JWTMiddleware.Handler())
+		favorites.Use(deps.JWTMiddleware.JWTAuthMiddleware())
 	}
 	{
-		protected.GET("/cars", deps.CarHandler.List)
-		protected.GET("/cars/:id", deps.CarHandler.GetByID)
-		protected.GET("/favorites", deps.FavoriteHandler.List)
-		protected.POST("/favorites/:carId", deps.FavoriteHandler.Add)
-		protected.DELETE("/favorites/:carId", deps.FavoriteHandler.Remove)
+		favorites.GET("", deps.FavoriteHandler.List)
+		favorites.POST("/:carId", deps.FavoriteHandler.Add)
+		favorites.DELETE("/:carId", deps.FavoriteHandler.Remove)
 	}
 }
