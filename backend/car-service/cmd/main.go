@@ -11,6 +11,7 @@ import (
 	"car-service/internal/middleware"
 	"car-service/internal/repository"
 	"car-service/internal/service"
+	"car-service/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,9 +47,10 @@ func run() error {
 		return fmt.Errorf("connect minio: %w", err)
 	}
 
+	imageStorage := storage.NewMinIOImageStorageService(minioClient, cfg.MinIO)
 	carRepository := repository.NewCarRepository(db)
 	favoriteRepository := repository.NewFavoriteRepository(db)
-	carService := service.NewCarService(carRepository)
+	carService := service.NewCarService(carRepository, imageStorage)
 	favoriteService := service.NewFavoriteService(favoriteRepository, carRepository)
 	carHandler := handler.NewCarHandler(carService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
@@ -60,7 +62,7 @@ func run() error {
 		CarHandler:      carHandler,
 		FavoriteHandler: favoriteHandler,
 		JWTMiddleware:   jwtMiddleware,
-		MinIOAvailable:  minioClient != nil,
+		MinIOAvailable:  imageStorage != nil,
 	})
 
 	if err := router.Run(":" + cfg.Server.Port); err != nil {

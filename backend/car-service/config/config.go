@@ -28,17 +28,23 @@ type JWTConfig struct {
 }
 
 type MinIOConfig struct {
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-	UseSSL    bool
-	Bucket    string
+	Endpoint      string
+	AccessKey     string
+	SecretKey     string
+	UseSSL        bool
+	DefaultBucket string
+	PresignTTL    time.Duration
 }
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	dbConfig, err := loadDatabaseConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	minioPresignTTL, err := getEnvAsDuration("MINIO_PRESIGN_TTL", 15*time.Minute)
 	if err != nil {
 		return nil, err
 	}
@@ -54,11 +60,12 @@ func Load() (*Config, error) {
 			AccessSecret: getEnv("JWT_ACCESS_SECRET", "dev-access-secret"),
 		},
 		MinIO: MinIOConfig{
-			Endpoint:  getEnv("MINIO_ENDPOINT", "localhost:9000"),
-			AccessKey: getEnv("MINIO_ACCESS_KEY", "minioadmin"),
-			SecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
-			UseSSL:    getEnvAsBool("MINIO_USE_SSL", false),
-			Bucket:    getEnv("MINIO_BUCKET", "car-images"),
+			Endpoint:      getEnv("MINIO_ENDPOINT", "localhost:9000"),
+			AccessKey:     getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+			SecretKey:     getEnv("MINIO_SECRET_KEY", "minioadmin"),
+			UseSSL:        getEnvAsBool("MINIO_USE_SSL", false),
+			DefaultBucket: getEnv("MINIO_DEFAULT_BUCKET", getEnv("MINIO_BUCKET", "car-images")),
+			PresignTTL:    minioPresignTTL,
 		},
 	}
 
@@ -68,6 +75,18 @@ func Load() (*Config, error) {
 
 	if err := cfg.DB.Validate(); err != nil {
 		return nil, fmt.Errorf("database config: %w", err)
+	}
+
+	if cfg.MinIO.Endpoint == "" {
+		return nil, fmt.Errorf("MINIO_ENDPOINT is required")
+	}
+
+	if cfg.MinIO.DefaultBucket == "" {
+		return nil, fmt.Errorf("MINIO_DEFAULT_BUCKET is required")
+	}
+
+	if cfg.MinIO.PresignTTL <= 0 {
+		return nil, fmt.Errorf("MINIO_PRESIGN_TTL must be greater than zero")
 	}
 
 	return cfg, nil

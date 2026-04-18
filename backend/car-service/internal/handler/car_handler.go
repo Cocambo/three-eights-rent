@@ -3,7 +3,6 @@ package handler
 import (
 	"net/http"
 
-	"car-service/internal/domains"
 	"car-service/internal/dto"
 	"car-service/internal/service"
 
@@ -53,19 +52,7 @@ func (h *CarHandler) List(c *gin.Context) {
 		return
 	}
 
-	catalogItems := make([]dto.CarCatalogItemResponse, 0, len(catalog.Items))
-	for _, car := range catalog.Items {
-		catalogItems = append(catalogItems, toCarCatalogItemResponse(car))
-	}
-
-	writeSuccess(c, http.StatusOK, dto.CarsCatalogResponse{
-		Items: catalogItems,
-		Pagination: dto.PaginationMeta{
-			Total:  catalog.Total,
-			Limit:  catalog.Limit,
-			Offset: catalog.Offset,
-		},
-	})
+	writeSuccess(c, http.StatusOK, catalog)
 }
 
 func (h *CarHandler) GetByID(c *gin.Context) {
@@ -80,58 +67,5 @@ func (h *CarHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	writeSuccess(c, http.StatusOK, toCarDetailsResponse(car))
-}
-
-func toCarCatalogItemResponse(car domains.Car) dto.CarCatalogItemResponse {
-	return dto.CarCatalogItemResponse{
-		ID:           car.ID,
-		Brand:        car.Brand,
-		Model:        car.Model,
-		Year:         car.Year,
-		FuelType:     car.FuelType,
-		Transmission: car.Transmission,
-		BodyType:     car.BodyType,
-		SeatsCount:   car.SeatsCount,
-		PricePerDay:  car.PricePerDay,
-		Purpose:      car.Purpose,
-		MainImageURL: mainImageURL(car.CarImages),
-	}
-}
-
-func toCarDetailsResponse(car domains.Car) dto.CarDetailsResponse {
-	images := make([]dto.CarImageResponse, 0, len(car.CarImages))
-	for _, image := range car.CarImages {
-		images = append(images, dto.CarImageResponse{
-			ID:        image.ID,
-			URL:       image.ObjectKey,
-			IsMain:    image.IsMain,
-			SortOrder: image.SortOrder,
-		})
-	}
-
-	return dto.CarDetailsResponse{
-		ID:           car.ID,
-		Brand:        car.Brand,
-		Model:        car.Model,
-		Year:         car.Year,
-		FuelType:     car.FuelType,
-		Transmission: car.Transmission,
-		BodyType:     car.BodyType,
-		Color:        car.Color,
-		SeatsCount:   car.SeatsCount,
-		PricePerDay:  car.PricePerDay,
-		Purpose:      car.Purpose,
-		Description:  car.Description,
-		Images:       images,
-	}
-}
-
-func mainImageURL(images []domains.CarImage) *string {
-	if len(images) == 0 {
-		return nil
-	}
-
-	url := images[0].ObjectKey
-	return &url
+	writeSuccess(c, http.StatusOK, car)
 }

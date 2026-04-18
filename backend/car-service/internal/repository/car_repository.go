@@ -42,20 +42,21 @@ type gormCarRepository struct {
 }
 
 type carCatalogRow struct {
-	ID           uint    `gorm:"column:id"`
-	Brand        string  `gorm:"column:brand"`
-	Model        string  `gorm:"column:model"`
-	Year         int     `gorm:"column:year"`
-	FuelType     string  `gorm:"column:fuel_type"`
-	Transmission string  `gorm:"column:transmission"`
-	BodyType     string  `gorm:"column:body_type"`
-	Color        string  `gorm:"column:color"`
-	SeatsCount   int     `gorm:"column:seats_count"`
-	PricePerDay  int64   `gorm:"column:price_per_day"`
-	Purpose      string  `gorm:"column:purpose"`
-	Description  string  `gorm:"column:description"`
-	MainImageID  *uint   `gorm:"column:main_image_id"`
-	MainImageKey *string `gorm:"column:main_image_object_key"`
+	ID              uint    `gorm:"column:id"`
+	Brand           string  `gorm:"column:brand"`
+	Model           string  `gorm:"column:model"`
+	Year            int     `gorm:"column:year"`
+	FuelType        string  `gorm:"column:fuel_type"`
+	Transmission    string  `gorm:"column:transmission"`
+	BodyType        string  `gorm:"column:body_type"`
+	Color           string  `gorm:"column:color"`
+	SeatsCount      int     `gorm:"column:seats_count"`
+	PricePerDay     int64   `gorm:"column:price_per_day"`
+	Purpose         string  `gorm:"column:purpose"`
+	Description     string  `gorm:"column:description"`
+	MainImageID     *uint   `gorm:"column:main_image_id"`
+	MainImageBucket *string `gorm:"column:main_image_bucket_name"`
+	MainImageKey    *string `gorm:"column:main_image_object_key"`
 }
 
 func NewCarRepository(db *gorm.DB) CarRepository {
@@ -150,6 +151,7 @@ func carCatalogSelect() []string {
 		"cars.purpose",
 		"cars.description",
 		"main_image.id AS main_image_id",
+		"main_image.bucket_name AS main_image_bucket_name",
 		"main_image.object_key AS main_image_object_key",
 	}
 }
@@ -170,13 +172,14 @@ func (r carCatalogRow) toDomain() domains.Car {
 		Description:  r.Description,
 	}
 
-	if r.MainImageID != nil && r.MainImageKey != nil {
+	if r.MainImageID != nil && r.MainImageBucket != nil && r.MainImageKey != nil {
 		car.CarImages = []domains.CarImage{
 			{
-				ID:        *r.MainImageID,
-				CarID:     r.ID,
-				ObjectKey: *r.MainImageKey,
-				IsMain:    true,
+				ID:         *r.MainImageID,
+				CarID:      r.ID,
+				BucketName: *r.MainImageBucket,
+				ObjectKey:  *r.MainImageKey,
+				IsMain:     true,
 			},
 		}
 	}
