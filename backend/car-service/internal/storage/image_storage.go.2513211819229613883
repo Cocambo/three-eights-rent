@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"strings"
 	"time"
 
@@ -30,26 +31,20 @@ type ImageStorageService interface {
 }
 
 type minioImageStorageService struct {
-	client        *minio.Client
-	presignClient *minio.Client
-	defaultBucket string
-	presignTTL    time.Duration
+	client         *minio.Client
+	defaultBucket  string
+	presignTTL     time.Duration
+	publicEndpoint string
+	publicUseSSL   bool
 }
 
-func NewMinIOImageStorageService(
-	client *minio.Client,
-	presignClient *minio.Client,
-	cfg config.MinIOConfig,
-) ImageStorageService {
-	if presignClient == nil {
-		presignClient = client
-	}
-
+func NewMinIOImageStorageService(client *minio.Client, cfg config.MinIOConfig) ImageStorageService {
 	return &minioImageStorageService{
 		client:        client,
-		presignClient: presignClient,
 		defaultBucket: strings.TrimSpace(cfg.DefaultBucket),
 		presignTTL:    cfg.PresignTTL,
+		publicEndpoint: strings.TrimSpace(cfg.PublicEndpoint),
+		publicUseSSL:   cfg.PublicUseSSL,
 	}
 }
 
@@ -119,7 +114,7 @@ func (s *minioImageStorageService) GeneratePresignedGetURL(
 		return "", err
 	}
 
-	presignedURL, err := s.presignClient.PresignedGetObject(
+	presignedURL, err := s.client.PresignedGetObject(
 		ctx,
 		resolvedBucket,
 		resolvedObjectKey,
@@ -130,7 +125,7 @@ func (s *minioImageStorageService) GeneratePresignedGetURL(
 		return "", fmt.Errorf("presign get object %s/%s: %w", resolvedBucket, resolvedObjectKey, err)
 	}
 
-	return presignedURL.String(), nil
+	return s.rewritePresignedURL(presignedURL.String())
 }
 
 func (s *minioImageStorageService) resolveLocation(
@@ -151,4 +146,25 @@ func (s *minioImageStorageService) resolveLocation(
 	}
 
 	return resolvedBucket, resolvedObjectKey, nil
+}
+
+func (s *minioImageStorageService) rewritePresignedURL(rawURL string) (string, error) {
+	if strings.TrimSpace(s.publicEndpoint) == "" {
+		return rawURL, nil
+	}
+
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("parse presigned url: %w", err)
+	}
+
+	if s.publicUseSSL {
+		parsedURL.Scheme = "https"
+	} else {
+		parsedURL.Scheme = "http"
+	}
+
+	parsedURL.Host = s.publicEndpoint
+
+	return parsedURL.String(), nil
 }

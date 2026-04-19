@@ -3,21 +3,47 @@
     <AppHeader />
 
     <main class="page-shell">
-      <section v-if="car" class="car-details">
+      <section v-if="isLoading" class="state-card">
+        <h1>Загружаем автомобиль</h1>
+        <p>Получаем актуальную карточку из car-service.</p>
+      </section>
+
+      <section v-else-if="errorMessage" class="state-card">
+        <h1>Не удалось загрузить карточку</h1>
+        <p>{{ errorMessage }}</p>
+        <button class="state-button" type="button" @click="loadCar">Повторить</button>
+      </section>
+
+      <section v-else-if="!car" class="state-card">
+        <h1>Автомобиль не найден</h1>
+        <p>Возможно, карточка была удалена или ссылка устарела.</p>
+        <RouterLink class="not-found__link" :to="{ name: 'cars' }">Вернуться в каталог</RouterLink>
+      </section>
+
+      <section v-else class="car-details">
         <div class="breadcrumbs">
           <RouterLink :to="{ name: 'cars' }">Автомобили</RouterLink>
           <span>/</span>
-          <span>{{ car.name }}</span>
+          <span>{{ carTitle }}</span>
         </div>
 
         <div class="content-grid">
           <div class="content-main">
             <section class="gallery">
-              <button class="gallery__hero" type="button" @click="openLightbox(selectedImageIndex)">
-                <img :src="selectedImage" :alt="car.name" />
+              <button
+                v-if="selectedImageUrl"
+                class="gallery__hero"
+                type="button"
+                @click="openLightbox(selectedImageIndex)"
+              >
+                <img :src="selectedImageUrl" :alt="carTitle" />
               </button>
+              <div v-else class="gallery__placeholder">
+                <span class="material-symbols-outlined">image</span>
+                <p>Изображения пока отсутствуют</p>
+              </div>
 
-              <div class="gallery__thumbs-wrap">
+              <div v-if="visibleThumbnails.length" class="gallery__thumbs-wrap">
                 <button
                   v-if="hasThumbPagination"
                   class="gallery__thumbs-nav gallery__thumbs-nav--prev"
@@ -29,16 +55,16 @@
                   <span class="material-symbols-outlined">chevron_left</span>
                 </button>
                 <div class="gallery__thumbs">
-                <button
-                  v-for="(image, index) in visibleThumbnails"
-                  :key="`${car.id}-${thumbnailWindowStart + index}`"
-                  class="gallery__thumb"
-                  :class="{ 'gallery__thumb--active': thumbnailWindowStart + index === selectedImageIndex }"
-                  type="button"
-                  @click="selectedImageIndex = thumbnailWindowStart + index"
-                >
-                  <img :src="image" :alt="`${car.name} фото ${index + 1}`" />
-                </button>
+                  <button
+                    v-for="(image, index) in visibleThumbnails"
+                    :key="image.id"
+                    class="gallery__thumb"
+                    :class="{ 'gallery__thumb--active': thumbnailWindowStart + index === selectedImageIndex }"
+                    type="button"
+                    @click="selectedImageIndex = thumbnailWindowStart + index"
+                  >
+                    <img :src="image.url" :alt="`${carTitle} фото ${thumbnailWindowStart + index + 1}`" />
+                  </button>
                 </div>
                 <button
                   v-if="hasThumbPagination"
@@ -54,8 +80,28 @@
             </section>
 
             <header class="hero-copy">
-              <h1>{{ car.name }}</h1>
-              <p class="hero-copy__text">{{ car.description }}</p>
+              <div class="hero-copy__header">
+                <div>
+                  <h1>{{ carTitle }}</h1>
+                  <p class="hero-copy__text">{{ car.description || 'Описание для этого автомобиля пока не добавлено.' }}</p>
+                </div>
+
+                <button
+                  class="favorite-button"
+                  type="button"
+                  :aria-label="favoriteButtonLabel"
+                  :aria-pressed="isFavorite"
+                  :disabled="favoritesStore.isPending(car.id)"
+                  @click="handleFavoriteClick"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    :class="{ 'favorite-button__icon--active': isFavorite }"
+                  >
+                    favorite
+                  </span>
+                </button>
+              </div>
 
               <div class="hero-copy__chips">
                 <span class="info-chip">{{ car.purpose }}</span>
@@ -84,11 +130,11 @@
                 </div>
                 <div class="details-row">
                   <span>Модель</span>
-                  <strong>{{ car.name }}</strong>
+                  <strong>{{ car.model }}</strong>
                 </div>
                 <div class="details-row">
                   <span>Кузов</span>
-                  <strong>{{ car.bodyType }}</strong>
+                  <strong>{{ car.body_type }}</strong>
                 </div>
                 <div class="details-row">
                   <span>Цвет</span>
@@ -104,11 +150,11 @@
                 </div>
                 <div class="details-row">
                   <span>Количество мест</span>
-                  <strong>{{ car.seats }}</strong>
+                  <strong>{{ car.seats_count }}</strong>
                 </div>
                 <div class="details-row">
                   <span>Тип топлива</span>
-                  <strong>{{ car.fuelType }}</strong>
+                  <strong>{{ car.fuel_type }}</strong>
                 </div>
               </div>
             </section>
@@ -118,7 +164,7 @@
             <div class="booking-card__top">
               <p>Стоимость аренды</p>
               <div>
-                <strong>{{ formatPrice(car.pricePerDay) }}</strong>
+                <strong>{{ formatPrice(car.price_per_day) }}</strong>
                 <span>/ сутки</span>
               </div>
             </div>
@@ -133,15 +179,6 @@
                 <span>Дата завершения</span>
                 <input v-model="bookingForm.endDate" :min="bookingForm.startDate || today" type="date" />
               </label>
-            </div>
-
-            <div class="availability">
-              <p class="availability__title">Недоступные даты</p>
-              <div class="availability__list">
-                <span v-for="range in car.unavailableRanges" :key="`${range.start}-${range.end}`">
-                  {{ formatRange(range.start, range.end) }}
-                </span>
-              </div>
             </div>
 
             <div class="booking-summary" :class="bookingState.toneClass">
@@ -170,35 +207,28 @@
 
             <p class="booking-note">
               <span class="material-symbols-outlined">verified_user</span>
-              {{ car.bookingNotice }}
+              Онлайн-бронирование пока работает как интерфейс-заглушка и не отправляет заявку в backend.
             </p>
 
             <div v-if="bookingResult" class="booking-result">
               <h3>Заглушка бронирования</h3>
               <p>{{ bookingResult }}</p>
             </div>
-
           </aside>
         </div>
-      </section>
-
-      <section v-else class="not-found">
-        <h1>Автомобиль не найден</h1>
-        <p>Возможно, карточка была удалена или ссылка устарела.</p>
-        <RouterLink class="not-found__link" :to="{ name: 'cars' }">Вернуться в каталог</RouterLink>
       </section>
     </main>
 
     <AppFooter />
 
-    <div v-if="car && lightboxOpen" class="lightbox" @click.self="closeLightbox">
+    <div v-if="car && lightboxOpen && selectedImageUrl" class="lightbox" @click.self="closeLightbox">
       <button class="lightbox__close" type="button" @click="closeLightbox">
         <span class="material-symbols-outlined">close</span>
       </button>
       <button class="lightbox__nav lightbox__nav--prev" type="button" @click="prevImage">
         <span class="material-symbols-outlined">chevron_left</span>
       </button>
-      <img class="lightbox__image" :src="selectedImage" :alt="car.name" />
+      <img class="lightbox__image" :src="selectedImageUrl" :alt="carTitle" />
       <button class="lightbox__nav lightbox__nav--next" type="button" @click="nextImage">
         <span class="material-symbols-outlined">chevron_right</span>
       </button>
@@ -207,53 +237,74 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
-import { findCarById } from '@/data/cars'
+import type { CarDetailsResponse } from '@/services/cars'
+import { getCarDetails } from '@/services/cars'
+import { ApiError, useAuthStore } from '@/stores/auth'
+import { useFavoritesStore } from '@/stores/favorites'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
+const favoritesStore = useFavoritesStore()
 
-const car = computed(() => {
-  const id = typeof route.params.id === 'string' ? route.params.id : ''
-  return findCarById(id)
-})
-
+const car = ref<CarDetailsResponse | null>(null)
+const isLoading = ref(false)
+const errorMessage = ref('')
 const selectedImageIndex = ref(0)
 const thumbnailWindowStart = ref(0)
 const lightboxOpen = ref(false)
 const bookingResult = ref('')
 const visibleThumbCount = 4
+const today = getToday()
 
 const bookingForm = reactive({
   startDate: '',
   endDate: '',
 })
 
-const today = getToday()
+let currentController: AbortController | null = null
 
-const selectedImage = computed(() => car.value?.images[selectedImageIndex.value] ?? '')
+const carId = computed<number | null>(() => {
+  const rawId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+  const parsedId = Number(rawId)
+
+  return Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
+})
+
+const carTitle = computed(() => (car.value ? `${car.value.brand} ${car.value.model}` : 'Автомобиль'))
+const selectedImageUrl = computed(() => car.value?.images[selectedImageIndex.value]?.url || '')
 const hasThumbPagination = computed(() => (car.value?.images.length ?? 0) > visibleThumbCount)
 const visibleThumbnails = computed(() =>
   car.value?.images.slice(thumbnailWindowStart.value, thumbnailWindowStart.value + visibleThumbCount) ?? [],
 )
 const canScrollThumbsPrev = computed(() => thumbnailWindowStart.value > 0)
 const canScrollThumbsNext = computed(() => {
-  if (!car.value) return false
+  if (!car.value) {
+    return false
+  }
 
   return thumbnailWindowStart.value + visibleThumbCount < car.value.images.length
 })
+const isFavorite = computed(() => (car.value ? favoritesStore.isFavorite(car.value.id) : false))
+const favoriteButtonLabel = computed(() =>
+  isFavorite.value ? 'Удалить из избранного' : 'Добавить в избранное',
+)
 
 const primaryFeatures = computed(() => {
-  if (!car.value) return []
+  if (!car.value) {
+    return []
+  }
 
   return [
     { label: 'Год выпуска', value: String(car.value.year), icon: 'calendar_today' },
-    { label: 'Топливо', value: car.value.fuelType, icon: 'local_gas_station' },
+    { label: 'Топливо', value: car.value.fuel_type, icon: 'local_gas_station' },
     { label: 'Трансмиссия', value: car.value.transmission, icon: 'settings' },
-    { label: 'Мест', value: String(car.value.seats), icon: 'group' },
+    { label: 'Мест', value: String(car.value.seats_count), icon: 'group' },
   ]
 })
 
@@ -273,7 +324,7 @@ const bookingState = computed(() => {
     return {
       ready: false,
       title: 'Выберите даты аренды',
-      description: 'Укажите дату начала и дату завершения, чтобы увидеть стоимость и доступность.',
+      description: 'Укажите дату начала и дату завершения, чтобы увидеть предварительный расчет.',
       days: 0,
       totalPrice: 0,
       toneClass: 'booking-summary--muted',
@@ -291,42 +342,140 @@ const bookingState = computed(() => {
     }
   }
 
-  const overlap = car.value.unavailableRanges.find((range) =>
-    rangesOverlap(bookingForm.startDate, bookingForm.endDate, range.start, range.end),
-  )
-
-  if (overlap) {
-    return {
-      ready: false,
-      title: 'Диапазон занят',
-      description: `Выбранные даты пересекаются с периодом ${formatRange(overlap.start, overlap.end)}.`,
-      days: 0,
-      totalPrice: 0,
-      toneClass: 'booking-summary--error',
-    }
-  }
-
   const days = getDaysBetween(bookingForm.startDate, bookingForm.endDate)
 
   return {
     ready: true,
-    title: 'Автомобиль свободен',
-    description: `Предварительный расчет для аренды с ${formatDate(bookingForm.startDate)} по ${formatDate(bookingForm.endDate)}.`,
+    title: 'Предварительный расчет готов',
+    description: `Стоимость аренды с ${formatDate(bookingForm.startDate)} по ${formatDate(bookingForm.endDate)}.`,
     days,
-    totalPrice: days * car.value.pricePerDay,
+    totalPrice: days * car.value.price_per_day,
     toneClass: 'booking-summary--success',
   }
 })
 
+async function loadCar() {
+  currentController?.abort()
+  currentController = new AbortController()
+  isLoading.value = true
+  errorMessage.value = ''
+  car.value = null
+
+  if (carId.value === null) {
+    isLoading.value = false
+    return
+  }
+
+  try {
+    car.value = await getCarDetails(carId.value, currentController.signal)
+    selectedImageIndex.value = 0
+    thumbnailWindowStart.value = 0
+
+    if (authStore.isAuthenticated) {
+      await favoritesStore.ensureLoaded()
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
+
+    if (error instanceof ApiError && error.status === 404) {
+      car.value = null
+      return
+    }
+
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Не удалось загрузить карточку автомобиля.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function handleFavoriteClick() {
+  if (!car.value) {
+    return
+  }
+
+  if (!authStore.isAuthenticated) {
+    await router.push({
+      name: 'login',
+      query: {
+        redirect: route.fullPath,
+      },
+    })
+    return
+  }
+
+  try {
+    await favoritesStore.toggleFavorite(car.value.id)
+  } catch {
+    // The store keeps the latest backend error for views that need it.
+  }
+}
+
+function openLightbox(index: number) {
+  if (!selectedImageUrl.value) {
+    return
+  }
+
+  selectedImageIndex.value = index
+  lightboxOpen.value = true
+}
+
+function closeLightbox() {
+  lightboxOpen.value = false
+}
+
+function prevImage() {
+  if (!car.value?.images.length) {
+    return
+  }
+
+  selectedImageIndex.value =
+    (selectedImageIndex.value - 1 + car.value.images.length) % car.value.images.length
+}
+
+function nextImage() {
+  if (!car.value?.images.length) {
+    return
+  }
+
+  selectedImageIndex.value = (selectedImageIndex.value + 1) % car.value.images.length
+}
+
+function scrollThumbsPrev() {
+  thumbnailWindowStart.value = Math.max(0, thumbnailWindowStart.value - 1)
+}
+
+function scrollThumbsNext() {
+  if (!car.value) {
+    return
+  }
+
+  thumbnailWindowStart.value = Math.min(
+    car.value.images.length - visibleThumbCount,
+    thumbnailWindowStart.value + 1,
+  )
+}
+
+function submitBooking() {
+  if (!car.value || !bookingState.value.ready) {
+    return
+  }
+
+  bookingResult.value =
+    `Заявка-заглушка создана: ${carTitle.value}, ${formatDate(bookingForm.startDate)} - ${formatDate(bookingForm.endDate)}, ` +
+    `${bookingState.value.days} суток, сумма ${formatPrice(bookingState.value.totalPrice)}. Позже сюда можно подключить backend бронирования.`
+}
+
 watch(
   () => route.params.id,
   () => {
-    selectedImageIndex.value = 0
-    thumbnailWindowStart.value = 0
-    lightboxOpen.value = false
+    closeLightbox()
     bookingResult.value = ''
     bookingForm.startDate = ''
     bookingForm.endDate = ''
+    void loadCar()
   },
 )
 
@@ -342,46 +491,13 @@ watch(selectedImageIndex, (index) => {
   }
 })
 
-function openLightbox(index: number) {
-  selectedImageIndex.value = index
-  lightboxOpen.value = true
-}
+onMounted(() => {
+  void loadCar()
+})
 
-function closeLightbox() {
-  lightboxOpen.value = false
-}
-
-function prevImage() {
-  if (!car.value) return
-  selectedImageIndex.value =
-    (selectedImageIndex.value - 1 + car.value.images.length) % car.value.images.length
-}
-
-function nextImage() {
-  if (!car.value) return
-  selectedImageIndex.value = (selectedImageIndex.value + 1) % car.value.images.length
-}
-
-function scrollThumbsPrev() {
-  thumbnailWindowStart.value = Math.max(0, thumbnailWindowStart.value - 1)
-}
-
-function scrollThumbsNext() {
-  if (!car.value) return
-
-  thumbnailWindowStart.value = Math.min(
-    car.value.images.length - visibleThumbCount,
-    thumbnailWindowStart.value + 1,
-  )
-}
-
-function submitBooking() {
-  if (!car.value || !bookingState.value.ready) return
-
-  bookingResult.value =
-    `Заявка-заглушка создана: ${car.value.name}, ${formatDate(bookingForm.startDate)} - ${formatDate(bookingForm.endDate)}, ` +
-    `${bookingState.value.days} суток, сумма ${formatPrice(bookingState.value.totalPrice)}. Позже сюда можно подключить API бронирования.`
-}
+onBeforeUnmount(() => {
+  currentController?.abort()
+})
 
 function formatPrice(price: number) {
   return `${new Intl.NumberFormat('ru-RU').format(price)} ₽`
@@ -393,14 +509,6 @@ function formatDate(dateString: string) {
     month: 'long',
     year: 'numeric',
   }).format(new Date(`${dateString}T00:00:00`))
-}
-
-function formatRange(start: string, end: string) {
-  return `${formatDate(start)} - ${formatDate(end)}`
-}
-
-function rangesOverlap(startA: string, endA: string, startB: string, endB: string) {
-  return startA < endB && endA > startB
 }
 
 function getDaysBetween(start: string, end: string) {
@@ -435,6 +543,58 @@ function getToday() {
   padding: 24px 0 48px;
 }
 
+.state-card,
+.hero-copy,
+.details-panel,
+.booking-card {
+  border: 1px solid rgba(17, 29, 35, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 20px 50px rgba(14, 40, 64, 0.06);
+}
+
+.state-card {
+  max-width: 680px;
+  margin: 48px auto 0;
+  padding: 40px;
+  border-radius: 30px;
+  text-align: center;
+}
+
+.state-card h1 {
+  margin: 0;
+}
+
+.state-card p {
+  margin: 16px 0 0;
+  color: #60707f;
+}
+
+.state-button,
+.not-found__link,
+.lightbox__close,
+.lightbox__nav,
+.favorite-button,
+.booking-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.state-button,
+.not-found__link {
+  min-height: 48px;
+  margin-top: 24px;
+  padding: 0 20px;
+  border-radius: 14px;
+  background: #001944;
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+}
+
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -454,16 +614,34 @@ function getToday() {
   gap: 18px;
 }
 
-.gallery__hero {
+.gallery__hero,
+.gallery__placeholder {
   position: relative;
   height: 420px;
   min-height: 280px;
   overflow: hidden;
-  border: 0;
   border-radius: 28px;
+}
+
+.gallery__hero {
+  border: 0;
   padding: 0;
   background: #dfe8ef;
   cursor: pointer;
+}
+
+.gallery__placeholder {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #eef4f8 0%, #d8e2eb 100%);
+  color: #526170;
+  text-align: center;
+  padding: 24px;
+}
+
+.gallery__placeholder .material-symbols-outlined {
+  font-size: 40px;
 }
 
 .gallery__hero img,
@@ -497,8 +675,6 @@ function getToday() {
   background: rgba(255, 255, 255, 0.92);
   color: #163f77;
   box-shadow: 0 12px 30px rgba(14, 40, 64, 0.08);
-  cursor: pointer;
-  transition: 0.2s ease;
 }
 
 .gallery__thumbs-nav:disabled {
@@ -533,34 +709,20 @@ function getToday() {
   gap: 24px;
 }
 
-.hero-copy,
-.details-panel,
-.booking-card,
-.not-found {
-  border: 1px solid rgba(17, 29, 35, 0.08);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 20px 50px rgba(14, 40, 64, 0.06);
-}
-
 .hero-copy {
   padding: 34px;
   border-radius: 30px;
 }
 
-.info-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 0 16px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 800;
+.hero-copy__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
 }
 
 .hero-copy h1,
 .details-panel h2,
-.not-found h1,
 .booking-result h3 {
   margin: 0;
 }
@@ -580,6 +742,38 @@ function getToday() {
   line-height: 1.8;
 }
 
+.favorite-button {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 18px;
+  background: #edf4f9;
+  color: #163f77;
+}
+
+.favorite-button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.favorite-button .material-symbols-outlined {
+  font-size: 28px;
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 300,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+.favorite-button__icon--active {
+  color: #ff7e8a;
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 500,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
 .hero-copy__chips {
   display: flex;
   flex-wrap: wrap;
@@ -588,8 +782,16 @@ function getToday() {
 }
 
 .info-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
   background: #edf4f9;
   color: #163f77;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .spec-grid {
@@ -610,12 +812,9 @@ function getToday() {
 }
 
 .spec-card p,
-.details-panel__header p,
 .booking-card__top p,
 .booking-note,
-.booking-result p,
-.not-found p,
-.availability__title {
+.booking-result p {
   margin: 0;
   color: #60707f;
 }
@@ -700,7 +899,6 @@ function getToday() {
 }
 
 .booking-field span,
-.availability__title,
 .booking-summary__title {
   color: #001944;
   font-size: 0.95rem;
@@ -721,31 +919,6 @@ function getToday() {
   outline: none;
   border-color: #3b63b7;
   box-shadow: 0 0 0 4px rgba(59, 99, 183, 0.12);
-}
-
-.availability {
-  padding: 18px;
-  border-radius: 20px;
-  background: #f5f9fc;
-}
-
-.availability__list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.availability__list span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(0, 25, 68, 0.08);
-  color: #36506b;
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .booking-summary {
@@ -781,18 +954,6 @@ function getToday() {
   font-weight: 700;
 }
 
-.booking-button,
-.not-found__link,
-.lightbox__close,
-.lightbox__nav {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
 .booking-button {
   min-height: 56px;
   border-radius: 18px;
@@ -823,25 +984,6 @@ function getToday() {
 .booking-result p {
   margin-top: 10px;
   line-height: 1.7;
-}
-
-.not-found {
-  max-width: 680px;
-  margin: 48px auto 0;
-  padding: 40px;
-  border-radius: 30px;
-  text-align: center;
-}
-
-.not-found__link {
-  min-height: 48px;
-  margin-top: 24px;
-  padding: 0 20px;
-  border-radius: 14px;
-  background: #001944;
-  color: #fff;
-  text-decoration: none;
-  font-weight: 700;
 }
 
 .lightbox {
@@ -908,7 +1050,8 @@ function getToday() {
     padding: 18px 0 32px;
   }
 
-  .gallery__hero {
+  .gallery__hero,
+  .gallery__placeholder {
     min-height: 240px;
     border-radius: 24px;
   }
@@ -930,15 +1073,15 @@ function getToday() {
   .hero-copy,
   .details-panel,
   .booking-card,
-  .not-found {
+  .state-card {
     padding: 22px;
     border-radius: 24px;
   }
 
-  .details-panel__header,
+  .hero-copy__header,
   .details-row {
     display: grid;
-    gap: 6px;
+    gap: 12px;
   }
 
   .details-row strong {

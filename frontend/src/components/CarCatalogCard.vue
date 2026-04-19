@@ -1,11 +1,30 @@
 <template>
   <article class="car-card">
     <div class="car-card__image-wrap">
-      <img :src="car.image" :alt="car.name" class="car-card__image" />
+      <img
+        v-if="car.imageUrl"
+        :src="car.imageUrl"
+        :alt="car.name"
+        class="car-card__image"
+      />
+      <div v-else class="car-card__image-placeholder">
+        <span class="material-symbols-outlined">image</span>
+        <span>Изображение недоступно</span>
+      </div>
 
-      <button class="favorite-button" type="button" aria-label="Добавить в избранное">
-        <span class="material-symbols-outlined">
-          {{ car.favorite ? 'favorite' : 'favorite' }}
+      <button
+        class="favorite-button"
+        type="button"
+        :aria-label="favoriteButtonLabel"
+        :aria-pressed="isFavorite"
+        :disabled="favoritesStore.isPending(car.id)"
+        @click="handleFavoriteClick"
+      >
+        <span
+          class="material-symbols-outlined"
+          :class="{ 'favorite-button__icon--active': isFavorite }"
+        >
+          favorite
         </span>
       </button>
     </div>
@@ -14,7 +33,7 @@
       <div class="car-card__top">
         <div>
           <h3>{{ car.name }}</h3>
-          <p>{{ car.category }}</p>
+          <p>{{ car.bodyType }}</p>
         </div>
         <div class="car-card__meta">
           <div class="car-card__price">
@@ -32,15 +51,15 @@
       <div class="car-card__specs">
         <div class="spec-item">
           <span class="material-symbols-outlined">group</span>
-          <span>{{ car.seats }}</span>
+          <span>{{ car.seatsCount }}</span>
         </div>
         <div class="spec-item">
           <span class="material-symbols-outlined">local_gas_station</span>
-          <span>{{ car.catalogFuelType }}</span>
+          <span>{{ car.fuelType }}</span>
         </div>
         <div class="spec-item">
           <span class="material-symbols-outlined">settings_suggest</span>
-          <span>{{ car.catalogTransmission }}</span>
+          <span>{{ car.transmission }}</span>
         </div>
         <div class="spec-item">
           <span class="material-symbols-outlined">calendar_today</span>
@@ -56,18 +75,60 @@
 </template>
 
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import type { Car } from '@/data/cars'
+import type { CarCatalogCardModel, CarCatalogItem } from '@/services/cars'
+import { useAuthStore } from '@/stores/auth'
+import { useFavoritesStore } from '@/stores/favorites'
 
-type CatalogCar = Car & {
-  catalogFuelType: string
-  catalogTransmission: string
+const props = defineProps<{
+  car: CarCatalogCardModel
+}>()
+
+const authStore = useAuthStore()
+const favoritesStore = useFavoritesStore()
+const router = useRouter()
+const route = useRoute()
+
+const isFavorite = computed(() => favoritesStore.isFavorite(props.car.id))
+const favoriteButtonLabel = computed(() =>
+  isFavorite.value ? 'Удалить из избранного' : 'Добавить в избранное',
+)
+
+function toCatalogItem(car: CarCatalogCardModel): CarCatalogItem {
+  return {
+    id: car.id,
+    brand: car.brand,
+    model: car.model,
+    year: car.year,
+    fuel_type: car.fuelType,
+    transmission: car.transmission,
+    body_type: car.bodyType,
+    seats_count: car.seatsCount,
+    price_per_day: car.pricePerDay,
+    purpose: car.purpose,
+    main_image_url: car.imageUrl,
+  }
 }
 
-defineProps<{
-  car: CatalogCar
-}>()
+async function handleFavoriteClick() {
+  if (!authStore.isAuthenticated) {
+    await router.push({
+      name: 'login',
+      query: {
+        redirect: route.fullPath,
+      },
+    })
+    return
+  }
+
+  try {
+    await favoritesStore.toggleFavorite(props.car.id, toCatalogItem(props.car))
+  } catch {
+    // The store keeps the last backend error message for the views that need it.
+  }
+}
 
 function formatPrice(price: number) {
   return `${new Intl.NumberFormat('ru-RU').format(price)} ₽`
@@ -89,11 +150,29 @@ function formatPrice(price: number) {
   overflow: hidden;
 }
 
-.car-card__image {
+.car-card__image,
+.car-card__image-placeholder {
   width: 100%;
   height: 100%;
+}
+
+.car-card__image {
   object-fit: cover;
   transition: transform 0.35s ease;
+}
+
+.car-card__image-placeholder {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #eef4f8 0%, #d8e2eb 100%);
+  color: #526170;
+  text-align: center;
+  padding: 24px;
+}
+
+.car-card__image-placeholder .material-symbols-outlined {
+  font-size: 36px;
 }
 
 .car-card:hover .car-card__image {
@@ -107,13 +186,14 @@ function formatPrice(price: number) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: 0;
   padding: 0;
-  background: transparent;
+  border-radius: 999px;
+  background: rgba(0, 25, 68, 0.34);
   color: #fff;
-  text-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
   cursor: pointer;
   transition: 0.2s ease;
 }
@@ -123,11 +203,25 @@ function formatPrice(price: number) {
   transform: translateY(-1px);
 }
 
+.favorite-button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
 .favorite-button .material-symbols-outlined {
-  font-size: 28px;
+  font-size: 26px;
   font-variation-settings:
     'FILL' 0,
     'wght' 300,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+.favorite-button__icon--active {
+  color: #ff7e8a;
+  font-variation-settings:
+    'FILL' 1,
+    'wght' 500,
     'GRAD' 0,
     'opsz' 24;
 }

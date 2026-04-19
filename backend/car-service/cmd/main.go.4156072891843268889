@@ -47,12 +47,7 @@ func run() error {
 		return fmt.Errorf("connect minio: %w", err)
 	}
 
-	minioPublicClient, err := config.NewMinIOPublicClient(cfg)
-	if err != nil {
-		return fmt.Errorf("connect minio public endpoint: %w", err)
-	}
-
-	imageStorage := storage.NewMinIOImageStorageService(minioClient, minioPublicClient, cfg.MinIO)
+	imageStorage := storage.NewMinIOImageStorageService(minioClient, cfg.MinIO)
 	carRepository := repository.NewCarRepository(db)
 	favoriteRepository := repository.NewFavoriteRepository(db)
 	carService := service.NewCarService(carRepository, imageStorage)

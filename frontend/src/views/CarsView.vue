@@ -12,7 +12,7 @@
         <div class="filters-list">
           <div class="filter-group">
             <label class="filter-label" for="brand">Марка автомобиля</label>
-            <select id="brand" v-model="filters.brand" class="field">
+            <select id="brand" v-model="draftFilters.brand" class="field">
               <option value="">Все марки</option>
               <option v-for="brand in brands" :key="brand" :value="brand">
                 {{ brand }}
@@ -23,7 +23,12 @@
           <div class="filter-group">
             <p class="filter-label">Назначение</p>
             <label v-for="purpose in purposes" :key="purpose" class="checkbox-row">
-              <input v-model="filters.purposes" type="checkbox" :value="purpose" />
+              <input
+                :checked="draftFilters.purpose === purpose"
+                type="checkbox"
+                :value="purpose"
+                @change="toggleSingleValueFilter('purpose', purpose)"
+              />
               <span>{{ purpose }}</span>
             </label>
           </div>
@@ -31,7 +36,12 @@
           <div class="filter-group">
             <p class="filter-label">Тип топлива</p>
             <label v-for="fuel in fuelTypes" :key="fuel" class="checkbox-row">
-              <input v-model="filters.fuelTypes" type="checkbox" :value="fuel" />
+              <input
+                :checked="draftFilters.fuelType === fuel"
+                type="checkbox"
+                :value="fuel"
+                @change="toggleSingleValueFilter('fuelType', fuel)"
+              />
               <span>{{ fuel }}</span>
             </label>
           </div>
@@ -42,8 +52,8 @@
               <button
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.bodyType === '' }"
-                @click="filters.bodyType = ''"
+                :class="{ 'chip--active': draftFilters.bodyType === '' }"
+                @click="draftFilters.bodyType = ''"
               >
                 Все
               </button>
@@ -52,8 +62,8 @@
                 :key="bodyType"
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.bodyType === bodyType }"
-                @click="filters.bodyType = bodyType"
+                :class="{ 'chip--active': draftFilters.bodyType === bodyType }"
+                @click="draftFilters.bodyType = bodyType"
               >
                 {{ bodyType }}
               </button>
@@ -66,8 +76,8 @@
               <button
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.seats === null }"
-                @click="filters.seats = null"
+                :class="{ 'chip--active': draftFilters.seatsMin === null }"
+                @click="draftFilters.seatsMin = null"
               >
                 Все
               </button>
@@ -76,8 +86,8 @@
                 :key="seat.value"
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.seats === seat.value }"
-                @click="filters.seats = seat.value"
+                :class="{ 'chip--active': draftFilters.seatsMin === seat.value }"
+                @click="draftFilters.seatsMin = seat.value"
               >
                 {{ seat.label }}
               </button>
@@ -88,14 +98,14 @@
             <p class="filter-label">Цена в сутки (₽)</p>
             <div class="price-grid">
               <input
-                v-model.number="filters.priceFrom"
+                v-model.number="draftFilters.priceMin"
                 type="number"
                 class="field"
                 placeholder="От"
                 min="0"
               />
               <input
-                v-model.number="filters.priceTo"
+                v-model.number="draftFilters.priceMax"
                 type="number"
                 class="field"
                 placeholder="До"
@@ -107,13 +117,18 @@
           <div class="filter-group">
             <p class="filter-label">КПП</p>
             <label v-for="transmission in transmissions" :key="transmission" class="checkbox-row">
-              <input v-model="filters.transmissions" type="checkbox" :value="transmission" />
+              <input
+                :checked="draftFilters.transmission === transmission"
+                type="checkbox"
+                :value="transmission"
+                @change="toggleSingleValueFilter('transmission', transmission)"
+              />
               <span>{{ transmission }}</span>
             </label>
           </div>
         </div>
 
-        <button class="primary-button" type="button">Применить</button>
+        <button class="primary-button" type="button" @click="applyFilters">Применить</button>
       </aside>
 
       <section class="catalog-content">
@@ -121,10 +136,26 @@
           <div>
             <h1>Доступные автомобили</h1>
           </div>
-          <span class="catalog-count">Найдено {{ filteredCars.length }} моделей</span>
+          <span class="catalog-count">Найдено {{ pagination.total }} моделей</span>
         </div>
 
-        <CarCatalogList :cars="filteredCars" />
+        <div v-if="isLoading" class="catalog-state">
+          <h3>Загружаем каталог</h3>
+          <p>Получаем актуальные автомобили из car-service.</p>
+        </div>
+
+        <div v-else-if="errorMessage" class="catalog-state catalog-state--error">
+          <h3>Не удалось загрузить каталог</h3>
+          <p>{{ errorMessage }}</p>
+          <button class="state-button" type="button" @click="reloadCatalog">Повторить</button>
+        </div>
+
+        <div v-else-if="!cars.length" class="catalog-state">
+          <h3>По вашему запросу ничего не найдено</h3>
+          <p>Попробуйте изменить фильтры или сбросить параметры поиска.</p>
+        </div>
+
+        <CarCatalogList v-else :cars="carCards" />
       </section>
     </main>
 
@@ -133,19 +164,37 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import CarCatalogList from '@/components/CarCatalogList.vue'
-import { cars, type Car } from '@/data/cars'
+import {
+  getCarsCatalog,
+  mapCarCatalogItemToCardModel,
+  type CarCatalogItem,
+  type CarsCatalogQuery,
+  type PaginationMeta,
+} from '@/services/cars'
+import { useAuthStore } from '@/stores/auth'
+import { useFavoritesStore } from '@/stores/favorites'
 
-type CatalogCar = Car & {
-  catalogFuelType: string
-  catalogTransmission: string
+interface FilterDraftState {
+  brand: string
+  purpose: string
+  fuelType: string
+  bodyType: string
+  seatsMin: number | null
+  priceMin: number | null
+  priceMax: number | null
+  transmission: string
 }
 
-const search = ref('')
+const defaultPagination: PaginationMeta = {
+  total: 0,
+  limit: 100,
+  offset: 0,
+}
 
 const brands = ['BMW', 'Mercedes-Benz', 'Audi', 'Porsche']
 const purposes = ['Для повседневной езды', 'Торжество', 'Деловые', 'Путешествия', 'Эксклюзив']
@@ -159,81 +208,162 @@ const seatsOptions = [
   { label: '7+', value: 7 },
 ]
 
-const filters = reactive({
-  brand: '',
-  purposes: [] as string[],
-  fuelTypes: [] as string[],
-  bodyType: '',
-  seats: null as number | null,
-  priceFrom: null as number | null,
-  priceTo: null as number | null,
-  transmissions: [] as string[],
+function createDefaultDraftFilters(): FilterDraftState {
+  return {
+    brand: '',
+    purpose: '',
+    fuelType: '',
+    bodyType: '',
+    seatsMin: null,
+    priceMin: null,
+    priceMax: null,
+    transmission: '',
+  }
+}
+
+const search = ref('')
+const cars = ref<CarCatalogItem[]>([])
+const pagination = ref<PaginationMeta>(defaultPagination)
+const isLoading = ref(false)
+const errorMessage = ref('')
+const draftFilters = reactive<FilterDraftState>(createDefaultDraftFilters())
+const appliedFilters = ref<FilterDraftState>(createDefaultDraftFilters())
+const activeQuery = ref<CarsCatalogQuery>({
+  limit: 100,
+  offset: 0,
 })
+const authStore = useAuthStore()
+const favoritesStore = useFavoritesStore()
 
-const catalogCars = computed<CatalogCar[]>(() =>
-  cars.map((car) => ({
-    ...car,
-    catalogFuelType:
-      car.fuelType === 'Бензин АИ-100'
-        ? 'Бензин'
-        : car.fuelType === 'Гибрид'
-          ? 'Гибрид'
-          : car.fuelType === 'Дизель'
-            ? 'Дизель'
-            : car.fuelType,
-    catalogTransmission: car.transmission === 'PDK 8-ступ.' ? 'АКПП' : car.transmission,
-  })),
-)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let currentController: AbortController | null = null
 
-const filteredCars = computed(() => {
-  return catalogCars.value.filter((car) => {
-    const matchesSearch =
-      !search.value ||
-      `${car.name} ${car.category} ${car.brand}`.toLowerCase().includes(search.value.toLowerCase())
+const carCards = computed(() => cars.value.map((car) => mapCarCatalogItemToCardModel(car)))
 
-    const matchesBrand = !filters.brand || car.brand === filters.brand
+function snapshotDraftFilters(): FilterDraftState {
+  return {
+    brand: draftFilters.brand,
+    purpose: draftFilters.purpose,
+    fuelType: draftFilters.fuelType,
+    bodyType: draftFilters.bodyType,
+    seatsMin: draftFilters.seatsMin,
+    priceMin: draftFilters.priceMin,
+    priceMax: draftFilters.priceMax,
+    transmission: draftFilters.transmission,
+  }
+}
 
-    const matchesPurposes = !filters.purposes.length || filters.purposes.includes(car.purpose)
+function assignDraftFilters(nextFilters: FilterDraftState) {
+  draftFilters.brand = nextFilters.brand
+  draftFilters.purpose = nextFilters.purpose
+  draftFilters.fuelType = nextFilters.fuelType
+  draftFilters.bodyType = nextFilters.bodyType
+  draftFilters.seatsMin = nextFilters.seatsMin
+  draftFilters.priceMin = nextFilters.priceMin
+  draftFilters.priceMax = nextFilters.priceMax
+  draftFilters.transmission = nextFilters.transmission
+}
 
-    const matchesFuel = !filters.fuelTypes.length || filters.fuelTypes.includes(car.catalogFuelType)
+function buildCatalogQuery(filters: FilterDraftState, searchQuery: string): CarsCatalogQuery {
+  return {
+    q: searchQuery.trim() || undefined,
+    brand: filters.brand || undefined,
+    fuel_type: filters.fuelType || undefined,
+    transmission: filters.transmission || undefined,
+    body_type: filters.bodyType || undefined,
+    seats_min: filters.seatsMin ?? undefined,
+    price_min: filters.priceMin ?? undefined,
+    price_max: filters.priceMax ?? undefined,
+    purpose: filters.purpose || undefined,
+    limit: 100,
+    offset: 0,
+  }
+}
 
-    const matchesBodyType = !filters.bodyType || car.bodyType === filters.bodyType
+async function loadCatalog(query: CarsCatalogQuery) {
+  currentController?.abort()
+  currentController = new AbortController()
+  isLoading.value = true
+  errorMessage.value = ''
 
-    const matchesSeats =
-      filters.seats === null || (filters.seats === 7 ? car.seats >= 7 : car.seats === filters.seats)
+  try {
+    const response = await getCarsCatalog(query, currentController.signal)
+    cars.value = response.items
+    pagination.value = response.pagination
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
 
-    const matchesPriceFrom = filters.priceFrom === null || car.pricePerDay >= filters.priceFrom
+    cars.value = []
+    pagination.value = defaultPagination
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Не удалось загрузить каталог автомобилей.'
+  } finally {
+    isLoading.value = false
+  }
+}
 
-    const matchesPriceTo = filters.priceTo === null || car.pricePerDay <= filters.priceTo
+function applyFilters() {
+  appliedFilters.value = snapshotDraftFilters()
+  const query = buildCatalogQuery(appliedFilters.value, search.value)
+  activeQuery.value = query
+  void loadCatalog(query)
+}
 
-    const matchesTransmission =
-      !filters.transmissions.length || filters.transmissions.includes(car.catalogTransmission)
-
-    return (
-      matchesSearch &&
-      matchesBrand &&
-      matchesPurposes &&
-      matchesFuel &&
-      matchesBodyType &&
-      matchesSeats &&
-      matchesPriceFrom &&
-      matchesPriceTo &&
-      matchesTransmission
-    )
-  })
-})
+function reloadCatalog() {
+  void loadCatalog(activeQuery.value)
+}
 
 function resetFilters() {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
+
   search.value = ''
-  filters.brand = ''
-  filters.purposes = []
-  filters.fuelTypes = []
-  filters.bodyType = ''
-  filters.seats = null
-  filters.priceFrom = null
-  filters.priceTo = null
-  filters.transmissions = []
+  const emptyFilters = createDefaultDraftFilters()
+  assignDraftFilters(emptyFilters)
+  appliedFilters.value = emptyFilters
+  const query = buildCatalogQuery(emptyFilters, '')
+  activeQuery.value = query
+  void loadCatalog(query)
 }
+
+function toggleSingleValueFilter(
+  key: 'purpose' | 'fuelType' | 'transmission',
+  value: string,
+) {
+  draftFilters[key] = draftFilters[key] === value ? '' : value
+}
+
+watch(search, () => {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+
+  searchTimer = setTimeout(() => {
+    const query = buildCatalogQuery(appliedFilters.value, search.value)
+    activeQuery.value = query
+    void loadCatalog(query)
+  }, 300)
+})
+
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    void favoritesStore.ensureLoaded()
+  }
+
+  void loadCatalog(activeQuery.value)
+})
+
+onBeforeUnmount(() => {
+  currentController?.abort()
+
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+})
 </script>
 
 <style scoped>
@@ -370,7 +500,8 @@ function resetFilters() {
   gap: 12px;
 }
 
-.primary-button {
+.primary-button,
+.state-button {
   border: 0;
   cursor: pointer;
   transition: 0.2s ease;
@@ -387,7 +518,7 @@ function resetFilters() {
 }
 
 .primary-button:hover,
-.primary-button:hover {
+.state-button:hover {
   transform: translateY(-1px);
 }
 
@@ -406,6 +537,38 @@ function resetFilters() {
 .catalog-count {
   color: #617080;
   font-size: 14px;
+}
+
+.catalog-state {
+  padding: 32px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(17, 29, 35, 0.08);
+  box-shadow: 0 16px 40px rgba(14, 40, 64, 0.06);
+  text-align: center;
+}
+
+.catalog-state--error {
+  border-color: rgba(186, 26, 26, 0.16);
+}
+
+.catalog-state h3 {
+  margin: 0;
+}
+
+.catalog-state p {
+  margin: 10px 0 0;
+  color: #617080;
+}
+
+.state-button {
+  min-height: 46px;
+  margin-top: 18px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: #163f77;
+  color: #fff;
+  font-weight: 700;
 }
 
 @media (max-width: 1100px) {
