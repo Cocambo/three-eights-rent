@@ -82,7 +82,13 @@ func (r *gormCarRepository) List(ctx context.Context, filter CarFilter) ([]domai
 		Model(&domains.Car{}).
 		Scopes(carCatalogFilterScopes(filter)...).
 		Joins(
-			"LEFT JOIN car_images AS main_image ON main_image.car_id = cars.id AND main_image.is_main = ?",
+			`LEFT JOIN LATERAL (
+				SELECT id, bucket_name, object_key
+				FROM car_images
+				WHERE car_images.car_id = cars.id AND car_images.is_main = ?
+				ORDER BY car_images.sort_order ASC, car_images.id ASC
+				LIMIT 1
+			) AS main_image ON true`,
 			true,
 		).
 		Select(carCatalogSelect()).

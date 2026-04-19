@@ -1,16 +1,24 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
+
+	apperrors "car-service/internal/errors"
+	httpresponse "car-service/internal/response"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const userIDContextKey = "user_id"
+type contextKey string
+
+const (
+	userIDGinContextKey     = "user_id"
+	userIDRequestContextKey = contextKey("user_id")
+)
 
 type JWTMiddleware struct {
 	accessSecret []byte
@@ -20,15 +28,6 @@ type AccessTokenClaims struct {
 	TokenType string `json:"token_type"`
 	UserID    uint   `json:"user_id"`
 	jwt.RegisteredClaims
-}
-
-type tokenErrorResponse struct {
-	Error tokenErrorBody `json:"error"`
-}
-
-type tokenErrorBody struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
 }
 
 func NewJWTMiddleware(accessSecret string) *JWTMiddleware {
@@ -51,7 +50,9 @@ func (m *JWTMiddleware) JWTAuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		c.Set(userIDContextKey, claims.UserID)
+		ctx := context.WithValue(c.Request.Context(), userIDRequestContextKey, claims.UserID)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set(userIDGinContextKey, claims.UserID)
 		c.Next()
 	}
 }
@@ -89,8 +90,13 @@ func (m *JWTMiddleware) parseAccessToken(tokenString string) (*AccessTokenClaims
 	return claims, nil
 }
 
+func UserIDFromContext(ctx context.Context) (uint, bool) {
+	userID, ok := ctx.Value(userIDRequestContextKey).(uint)
+	return userID, ok && userID > 0
+}
+
 func UserIDFromGin(c *gin.Context) (uint, bool) {
-	userID, ok := c.Get(userIDContextKey)
+	userID, ok := c.Get(userIDGinContextKey)
 	if !ok {
 		return 0, false
 	}
@@ -119,10 +125,5 @@ func extractBearerToken(header string) (string, error) {
 }
 
 func abortUnauthorized(c *gin.Context, message string) {
-	c.AbortWithStatusJSON(http.StatusUnauthorized, tokenErrorResponse{
-		Error: tokenErrorBody{
-			Code:    "unauthorized",
-			Message: message,
-		},
-	})
+	httpresponse.WriteError(c, apperrors.New(apperrors.ErrUnauthorized, message))
 }
