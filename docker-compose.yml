@@ -89,19 +89,8 @@ services:
   user-service:
     build:
       context: ./backend/user-service
-    environment:
-      SERVER_PORT: 8081
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: user_service
-      DB_SSLMODE: disable
-      DB_TIMEZONE: UTC
-      JWT_ACCESS_SECRET: dev-access-secret
-      JWT_REFRESH_SECRET: dev-refresh-secret
-      JWT_ACCESS_TTL: 20m
-      JWT_REFRESH_TTL: 720h
+    env_file:
+      - ./backend/user-service/.env
     depends_on:
       migrate-user-service:
         condition: service_completed_successfully
@@ -118,27 +107,8 @@ services:
   car-service:
     build:
       context: ./backend/car-service
-    environment:
-      APP_ENV: development
-      SERVER_PORT: 8082
-      GIN_MODE: debug
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: car_service
-      DB_SSLMODE: disable
-      DB_MAX_IDLE_CONNS: 10
-      DB_MAX_OPEN_CONNS: 25
-      DB_CONN_MAX_LIFETIME: 1h
-      DB_CONN_MAX_IDLE_TIME: 15m
-      JWT_ACCESS_SECRET: dev-access-secret
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-      MINIO_USE_SSL: "false"
-      MINIO_DEFAULT_BUCKET: car-images
-      MINIO_PRESIGN_TTL: 15m
+    env_file:
+      - ./backend/car-service/.env
     depends_on:
       migrate-car-service:
         condition: service_completed_successfully
@@ -157,12 +127,8 @@ services:
   api-gateway:
     build:
       context: ./backend/api-gateway-service
-    environment:
-      SERVER_PORT: 8080
-      GIN_MODE: debug
-      JWT_ACCESS_SECRET: dev-access-secret
-      USER_SERVICE_URL: http://user-service:8081
-      CAR_SERVICE_URL: http://car-service:8082
+    env_file:
+      - ./backend/api-gateway-service/.env
     depends_on:
       user-service:
         condition: service_healthy
