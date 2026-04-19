@@ -21,16 +21,9 @@
             <strong>{{ formatPrice(car.pricePerDay) }}</strong>
             <span>в сутки</span>
           </div>
-          <div v-if="car.tags.length" class="car-card__badges car-card__badges--stacked">
-            <span
-              v-for="badge in car.tags"
-              :key="badge"
-              class="badge"
-              :class="{
-                'badge--premium': badge.toLowerCase() === 'premium',
-              }"
-            >
-              {{ badge }}
+          <div v-if="car.purpose" class="car-card__badges car-card__badges--stacked">
+            <span class="badge">
+              {{ car.purpose }}
             </span>
           </div>
         </div>
@@ -48,6 +41,10 @@
         <div class="spec-item">
           <span class="material-symbols-outlined">settings_suggest</span>
           <span>{{ car.catalogTransmission }}</span>
+        </div>
+        <div class="spec-item">
+          <span class="material-symbols-outlined">calendar_today</span>
+          <span>{{ car.year }}</span>
         </div>
       </div>
 
@@ -209,10 +206,6 @@ function formatPrice(price: number) {
   overflow: hidden;
 }
 
-.badge--premium {
-  background: linear-gradient(135deg, #2f74c4 0%, #194987 100%);
-}
-
 .car-card__specs {
   display: flex;
   align-items: center;
@@ -228,6 +221,7 @@ function formatPrice(price: number) {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   color: #526170;
   font-size: 14px;
 }

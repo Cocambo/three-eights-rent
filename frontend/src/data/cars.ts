@@ -32,11 +32,9 @@ export interface Car {
     maxSpeed: string
     deposit: string
     location: string
-    purpose: string
     description: string
     shortDescription: string
-    tags: string[]
-    purposes: string[]
+    purpose: string
     favorite: boolean
     image: string
     images: string[]
@@ -71,12 +69,10 @@ export const cars: Car[] = [
         maxSpeed: '250 км/ч',
         deposit: '50 000 ₽',
         location: 'Казань, подача по городу и в аэропорт',
-        purpose: 'Деловые поездки / ежедневная аренда',
         description:
             'Сдержанный представительский седан с премиальной отделкой салона, мягкой подвеской и отличной шумоизоляцией. Подходит для встреч, трансферов и комфортных поездок по городу.',
         shortDescription: 'Комфортный седан для города, встреч и деловых поездок.',
-        tags: ['Деловые'],
-        purposes: ['Для повседневной езды', 'Деловые'],
+        purpose: 'Для повседневной езды',
         favorite: false,
         image:
             'https://lh3.googleusercontent.com/aida-public/AB6AXuATbMiiFzDVbyOH4dxedupRIw8ps3h8HWNzkD-O-ajZWiK3V5HWKpK0qkRMtsdyW0mjG2dtE-zThPXm6tmLj0akHeGHQ7a3qkbElDjMSoEQaByr2Y_6_JQKfXWf7ZYGDLgI4R17mWOnIuOvm2h9GCsAXsrxySGe8tQ5NZCROtnzzRbE7OWWqyojKhEotsNIwoBvB0_zlp44KjhliOf6e79gbFoqrOr547PggsbCYK9urjHtF5RncJCs-ONW56wr-uf0Af74IKvXiAkx',
@@ -129,12 +125,10 @@ export const cars: Car[] = [
         maxSpeed: '241 км/ч',
         deposit: '70 000 ₽',
         location: 'Казань, подача по Татарстану',
-        purpose: 'Путешествия / семья / трансферы',
         description:
             'Просторный премиальный SUV для большой семьи и дальних поездок. В салоне много места, удобная посадка и продуманная конфигурация для чемоданов и ручной клади.',
         shortDescription: 'Большой премиальный SUV для семьи и дальних маршрутов.',
-        tags: ['Путешествия'],
-        purposes: ['Путешествия', 'Для повседневной езды'],
+        purpose: 'Путешествия',
         favorite: true,
         image:
             'https://lh3.googleusercontent.com/aida-public/AB6AXuALlODOR1o8SfbAHgwWxeVVp_cjVkJQYbLk5mwXOjwGf2UvAK-Gv_KkbkLjHKtR-sDVEQvGvN885JNsMzn7tGKB_7A0ElcCdyYElPnnGvztbFEVtu0q55InTyYeb8PKssRH2KEfgEHb_B8TIgiC15jWdCmMl3w5BcUx9r-styygOa7sEzz2OuJQmCkHJ7q5xE7OYREeE8wjOZ208vsjjSU7BMyNgPPuxyobfCp4fFC9szgRkYYDWvJiwObWBxQq6_UNh-8SAFYsOj49',
@@ -187,12 +181,10 @@ export const cars: Car[] = [
         maxSpeed: '330 км/ч',
         deposit: '300 000 ₽',
         location: 'Казань, возможна подача в аэропорт',
-        purpose: 'Бизнес / путешествия / особые события',
         description:
             'Вершина инженерной мысли и символ динамического превосходства. Этот 911 Turbo S сочетает повседневный комфорт, трековую точность и эмоции суперкара в одном автомобиле.',
         shortDescription: 'Икона спортивной аренды с мощностью суперкара и комфортом гран-турера.',
-        tags: ['Premium', 'Эксклюзив'],
-        purposes: ['Эксклюзив', 'Путешествия', 'Деловые'],
+        purpose: 'Эксклюзив',
         favorite: false,
         image:
             'https://lh3.googleusercontent.com/aida-public/AB6AXuASwknNcUmfA4vFQUcaiqzFUiEvW_pDx0HuugvPerFSaJPTbAByW913uQiTx9rLm0MeO-2ovSTunj9cFvnjO9ufcKqkskq36HUjU9yCbdzUkB1NZ13ilYHZSZOSxhAVhDnZjWEYq5rT_cKgfVLr2YFFid79GQ_pEQrz8cfrgcWaFirrnjabolwS6Ot2Ge8OnBC6x3eqW3CG4iTKro8krws0wmZTUz89doxW8U3uGgb6XEtBHraw2PaSicN_NwJiNBoKqM1m4-t7D5Wt',
@@ -246,12 +238,10 @@ export const cars: Car[] = [
         maxSpeed: '245 км/ч',
         deposit: '60 000 ₽',
         location: 'Казань, подача по городу',
-        purpose: 'Торжества / деловые встречи',
         description:
             'Современный бизнес-седан с мягким ходом, просторным вторым рядом и статусным внешним видом. Отличный выбор для свадеб, мероприятий и важных поездок.',
         shortDescription: 'Статусный седан для церемоний, встреч и делового ритма.',
-        tags: ['Торжество'],
-        purposes: ['Торжество', 'Деловые'],
+        purpose: 'Торжество',
         favorite: false,
         image:
             'https://lh3.googleusercontent.com/aida-public/AB6AXuDurqKFTSW23S7kbn-rtS3eYI_bHB_cPzFQDyjqCN_r2feZejL1LPGE9vPFDC92PHfeKWJ9_idAQPwFMTwpgi-FHbWRrruMj8ua2QAqz8Nkq-W3y0EemBYiQqnGdO-5gl4pkDqD_YLgo0XkfYIOWaQZjYvrXJigZQksmJ6G5V6g1h8S73ZSY3f2HbdvT0TLMZ8RXUgbu_ErA7Qko8pb3VfGKwICZcfA1glKzJUM0VFFhS3NWNpYsRUllWe9xe9zIA6wJKxImnvW8cnX',

@@ -193,8 +193,7 @@ const filteredCars = computed(() => {
 
     const matchesBrand = !filters.brand || car.brand === filters.brand
 
-    const matchesPurposes =
-      !filters.purposes.length || filters.purposes.some((purpose) => car.purposes.includes(purpose))
+    const matchesPurposes = !filters.purposes.length || filters.purposes.includes(car.purpose)
 
     const matchesFuel = !filters.fuelTypes.length || filters.fuelTypes.includes(car.catalogFuelType)
 
