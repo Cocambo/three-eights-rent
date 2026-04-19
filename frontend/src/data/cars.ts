@@ -79,8 +79,10 @@ export const cars: Car[] = [
         images: [
             'https://lh3.googleusercontent.com/aida-public/AB6AXuATbMiiFzDVbyOH4dxedupRIw8ps3h8HWNzkD-O-ajZWiK3V5HWKpK0qkRMtsdyW0mjG2dtE-zThPXm6tmLj0akHeGHQ7a3qkbElDjMSoEQaByr2Y_6_JQKfXWf7ZYGDLgI4R17mWOnIuOvm2h9GCsAXsrxySGe8tQ5NZCROtnzzRbE7OWWqyojKhEotsNIwoBvB0_zlp44KjhliOf6e79gbFoqrOr547PggsbCYK9urjHtF5RncJCs-ONW56wr-uf0Af74IKvXiAkx',
             'https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80',
             'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80',
             'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80',
+
         ],
         features: [
             { label: 'Год выпуска', value: '2024', icon: 'calendar_today' },
@@ -249,6 +251,7 @@ export const cars: Car[] = [
             'https://lh3.googleusercontent.com/aida-public/AB6AXuDurqKFTSW23S7kbn-rtS3eYI_bHB_cPzFQDyjqCN_r2feZejL1LPGE9vPFDC92PHfeKWJ9_idAQPwFMTwpgi-FHbWRrruMj8ua2QAqz8Nkq-W3y0EemBYiQqnGdO-5gl4pkDqD_YLgo0XkfYIOWaQZjYvrXJigZQksmJ6G5V6g1h8S73ZSY3f2HbdvT0TLMZ8RXUgbu_ErA7Qko8pb3VfGKwICZcfA1glKzJUM0VFFhS3NWNpYsRUllWe9xe9zIA6wJKxImnvW8cnX',
             'https://images.unsplash.com/photo-1617814076668-8dfc67a0e099?auto=format&fit=crop&w=1200&q=80',
             'https://images.unsplash.com/photo-1525609004556-c46c7d6cf023?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=1200&q=80',
             'https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=1200&q=80',
         ],
         features: [

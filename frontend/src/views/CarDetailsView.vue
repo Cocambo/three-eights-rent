@@ -17,16 +17,38 @@
                 <img :src="selectedImage" :alt="car.name" />
               </button>
 
-              <div class="gallery__thumbs">
+              <div class="gallery__thumbs-wrap">
                 <button
-                  v-for="(image, index) in car.images"
-                  :key="`${car.id}-${index}`"
-                  class="gallery__thumb"
-                  :class="{ 'gallery__thumb--active': index === selectedImageIndex }"
+                  v-if="hasThumbPagination"
+                  class="gallery__thumbs-nav gallery__thumbs-nav--prev"
                   type="button"
-                  @click="selectedImageIndex = index"
+                  :disabled="!canScrollThumbsPrev"
+                  aria-label="Показать предыдущие фото"
+                  @click="scrollThumbsPrev"
+                >
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <div class="gallery__thumbs">
+                <button
+                  v-for="(image, index) in visibleThumbnails"
+                  :key="`${car.id}-${thumbnailWindowStart + index}`"
+                  class="gallery__thumb"
+                  :class="{ 'gallery__thumb--active': thumbnailWindowStart + index === selectedImageIndex }"
+                  type="button"
+                  @click="selectedImageIndex = thumbnailWindowStart + index"
                 >
                   <img :src="image" :alt="`${car.name} фото ${index + 1}`" />
+                </button>
+                </div>
+                <button
+                  v-if="hasThumbPagination"
+                  class="gallery__thumbs-nav gallery__thumbs-nav--next"
+                  type="button"
+                  :disabled="!canScrollThumbsNext"
+                  aria-label="Показать следующие фото"
+                  @click="scrollThumbsNext"
+                >
+                  <span class="material-symbols-outlined">chevron_right</span>
                 </button>
               </div>
             </section>
@@ -200,8 +222,10 @@ const car = computed(() => {
 })
 
 const selectedImageIndex = ref(0)
+const thumbnailWindowStart = ref(0)
 const lightboxOpen = ref(false)
 const bookingResult = ref('')
+const visibleThumbCount = 4
 
 const bookingForm = reactive({
   startDate: '',
@@ -211,6 +235,16 @@ const bookingForm = reactive({
 const today = getToday()
 
 const selectedImage = computed(() => car.value?.images[selectedImageIndex.value] ?? '')
+const hasThumbPagination = computed(() => (car.value?.images.length ?? 0) > visibleThumbCount)
+const visibleThumbnails = computed(() =>
+  car.value?.images.slice(thumbnailWindowStart.value, thumbnailWindowStart.value + visibleThumbCount) ?? [],
+)
+const canScrollThumbsPrev = computed(() => thumbnailWindowStart.value > 0)
+const canScrollThumbsNext = computed(() => {
+  if (!car.value) return false
+
+  return thumbnailWindowStart.value + visibleThumbCount < car.value.images.length
+})
 
 const primaryFeatures = computed(() => {
   if (!car.value) return []
@@ -288,12 +322,25 @@ watch(
   () => route.params.id,
   () => {
     selectedImageIndex.value = 0
+    thumbnailWindowStart.value = 0
     lightboxOpen.value = false
     bookingResult.value = ''
     bookingForm.startDate = ''
     bookingForm.endDate = ''
   },
 )
+
+watch(selectedImageIndex, (index) => {
+  if (index < thumbnailWindowStart.value) {
+    thumbnailWindowStart.value = index
+    return
+  }
+
+  const visibleWindowEnd = thumbnailWindowStart.value + visibleThumbCount - 1
+  if (index > visibleWindowEnd) {
+    thumbnailWindowStart.value = index - visibleThumbCount + 1
+  }
+})
 
 function openLightbox(index: number) {
   selectedImageIndex.value = index
@@ -313,6 +360,19 @@ function prevImage() {
 function nextImage() {
   if (!car.value) return
   selectedImageIndex.value = (selectedImageIndex.value + 1) % car.value.images.length
+}
+
+function scrollThumbsPrev() {
+  thumbnailWindowStart.value = Math.max(0, thumbnailWindowStart.value - 1)
+}
+
+function scrollThumbsNext() {
+  if (!car.value) return
+
+  thumbnailWindowStart.value = Math.min(
+    car.value.images.length - visibleThumbCount,
+    thumbnailWindowStart.value + 1,
+  )
 }
 
 function submitBooking() {
@@ -413,10 +473,37 @@ function getToday() {
   object-fit: cover;
 }
 
+.gallery__thumbs-wrap {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .gallery__thumbs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+
+.gallery__thumbs-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(17, 29, 35, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #163f77;
+  box-shadow: 0 12px 30px rgba(14, 40, 64, 0.08);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.gallery__thumbs-nav:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
 }
 
 .gallery__thumb {
@@ -830,6 +917,14 @@ function getToday() {
   .spec-grid,
   .details-table {
     grid-template-columns: 1fr;
+  }
+
+  .gallery__thumbs-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery__thumbs-nav {
+    width: 100%;
   }
 
   .hero-copy,
