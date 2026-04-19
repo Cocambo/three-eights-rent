@@ -33,7 +33,7 @@
       <div class="car-card__top">
         <div>
           <h3>{{ car.name }}</h3>
-          <p>{{ car.bodyType }}</p>
+          <p>{{ formatBodyType(car.bodyType) }}</p>
         </div>
         <div class="car-card__meta">
           <div class="car-card__price">
@@ -132,6 +132,14 @@ async function handleFavoriteClick() {
 
 function formatPrice(price: number) {
   return `${new Intl.NumberFormat('ru-RU').format(price)} ₽`
+}
+
+function formatBodyType(bodyType: string) {
+  if (!bodyType) {
+    return ''
+  }
+
+  return bodyType.charAt(0).toUpperCase() + bodyType.slice(1)
 }
 </script>
 

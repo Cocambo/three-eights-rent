@@ -14,35 +14,35 @@
             <label class="filter-label" for="brand">Марка автомобиля</label>
             <select id="brand" v-model="draftFilters.brand" class="field">
               <option value="">Все марки</option>
-              <option v-for="brand in brands" :key="brand" :value="brand">
-                {{ brand }}
+              <option v-for="brand in brandOptions" :key="brand.value" :value="brand.value">
+                {{ brand.label }}
               </option>
             </select>
           </div>
 
           <div class="filter-group">
             <p class="filter-label">Назначение</p>
-            <label v-for="purpose in purposes" :key="purpose" class="checkbox-row">
+            <label v-for="purpose in purposeOptions" :key="purpose.value" class="checkbox-row">
               <input
-                :checked="draftFilters.purpose === purpose"
+                :checked="draftFilters.purpose === purpose.value"
                 type="checkbox"
-                :value="purpose"
-                @change="toggleSingleValueFilter('purpose', purpose)"
+                :value="purpose.value"
+                @change="toggleSingleValueFilter('purpose', purpose.value)"
               />
-              <span>{{ purpose }}</span>
+              <span>{{ purpose.label }}</span>
             </label>
           </div>
 
           <div class="filter-group">
             <p class="filter-label">Тип топлива</p>
-            <label v-for="fuel in fuelTypes" :key="fuel" class="checkbox-row">
+            <label v-for="fuel in fuelTypeOptions" :key="fuel.value" class="checkbox-row">
               <input
-                :checked="draftFilters.fuelType === fuel"
+                :checked="draftFilters.fuelType === fuel.value"
                 type="checkbox"
-                :value="fuel"
-                @change="toggleSingleValueFilter('fuelType', fuel)"
+                :value="fuel.value"
+                @change="toggleSingleValueFilter('fuelType', fuel.value)"
               />
-              <span>{{ fuel }}</span>
+              <span>{{ fuel.label }}</span>
             </label>
           </div>
 
@@ -58,14 +58,14 @@
                 Все
               </button>
               <button
-                v-for="bodyType in bodyTypes"
-                :key="bodyType"
+                v-for="bodyType in bodyTypeOptions"
+                :key="bodyType.value"
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': draftFilters.bodyType === bodyType }"
-                @click="draftFilters.bodyType = bodyType"
+                :class="{ 'chip--active': draftFilters.bodyType === bodyType.value }"
+                @click="draftFilters.bodyType = bodyType.value"
               >
-                {{ bodyType }}
+                {{ bodyType.label }}
               </button>
             </div>
           </div>
@@ -76,8 +76,8 @@
               <button
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': draftFilters.seatsMin === null }"
-                @click="draftFilters.seatsMin = null"
+                :class="{ 'chip--active': draftFilters.seatsCount === null }"
+                @click="draftFilters.seatsCount = null"
               >
                 Все
               </button>
@@ -86,8 +86,8 @@
                 :key="seat.value"
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': draftFilters.seatsMin === seat.value }"
-                @click="draftFilters.seatsMin = seat.value"
+                :class="{ 'chip--active': draftFilters.seatsCount === seat.value }"
+                @click="draftFilters.seatsCount = seat.value"
               >
                 {{ seat.label }}
               </button>
@@ -116,14 +116,18 @@
 
           <div class="filter-group">
             <p class="filter-label">КПП</p>
-            <label v-for="transmission in transmissions" :key="transmission" class="checkbox-row">
+            <label
+              v-for="transmission in transmissionOptions"
+              :key="transmission.value"
+              class="checkbox-row"
+            >
               <input
-                :checked="draftFilters.transmission === transmission"
+                :checked="draftFilters.transmission === transmission.value"
                 type="checkbox"
-                :value="transmission"
-                @change="toggleSingleValueFilter('transmission', transmission)"
+                :value="transmission.value"
+                @change="toggleSingleValueFilter('transmission', transmission.value)"
               />
-              <span>{{ transmission }}</span>
+              <span>{{ transmission.label }}</span>
             </label>
           </div>
         </div>
@@ -184,10 +188,15 @@ interface FilterDraftState {
   purpose: string
   fuelType: string
   bodyType: string
-  seatsMin: number | null
+  seatsCount: number | null
   priceMin: number | null
   priceMax: number | null
   transmission: string
+}
+
+interface FilterOption {
+  value: string
+  label: string
 }
 
 const defaultPagination: PaginationMeta = {
@@ -196,16 +205,11 @@ const defaultPagination: PaginationMeta = {
   offset: 0,
 }
 
-const brands = ['BMW', 'Mercedes-Benz', 'Audi', 'Porsche']
-const purposes = ['Для повседневной езды', 'Торжество', 'Деловые', 'Путешествия', 'Эксклюзив']
-const fuelTypes = ['Бензин', 'Дизель', 'Электро', 'Гибрид']
-const bodyTypes = ['Седан', 'SUV', 'Купе']
-const transmissions = ['АКПП', 'МКПП']
 const seatsOptions = [
   { label: '2', value: 2 },
   { label: '4', value: 4 },
   { label: '5', value: 5 },
-  { label: '7+', value: 7 },
+  { label: '7', value: 7 },
 ]
 
 function createDefaultDraftFilters(): FilterDraftState {
@@ -214,7 +218,7 @@ function createDefaultDraftFilters(): FilterDraftState {
     purpose: '',
     fuelType: '',
     bodyType: '',
-    seatsMin: null,
+    seatsCount: null,
     priceMin: null,
     priceMax: null,
     transmission: '',
@@ -226,6 +230,11 @@ const cars = ref<CarCatalogItem[]>([])
 const pagination = ref<PaginationMeta>(defaultPagination)
 const isLoading = ref(false)
 const errorMessage = ref('')
+const brandOptions = ref<FilterOption[]>([])
+const purposeOptions = ref<FilterOption[]>([])
+const fuelTypeOptions = ref<FilterOption[]>([])
+const bodyTypeOptions = ref<FilterOption[]>([])
+const transmissionOptions = ref<FilterOption[]>([])
 const draftFilters = reactive<FilterDraftState>(createDefaultDraftFilters())
 const appliedFilters = ref<FilterDraftState>(createDefaultDraftFilters())
 const activeQuery = ref<CarsCatalogQuery>({
@@ -246,7 +255,7 @@ function snapshotDraftFilters(): FilterDraftState {
     purpose: draftFilters.purpose,
     fuelType: draftFilters.fuelType,
     bodyType: draftFilters.bodyType,
-    seatsMin: draftFilters.seatsMin,
+    seatsCount: draftFilters.seatsCount,
     priceMin: draftFilters.priceMin,
     priceMax: draftFilters.priceMax,
     transmission: draftFilters.transmission,
@@ -258,10 +267,31 @@ function assignDraftFilters(nextFilters: FilterDraftState) {
   draftFilters.purpose = nextFilters.purpose
   draftFilters.fuelType = nextFilters.fuelType
   draftFilters.bodyType = nextFilters.bodyType
-  draftFilters.seatsMin = nextFilters.seatsMin
+  draftFilters.seatsCount = nextFilters.seatsCount
   draftFilters.priceMin = nextFilters.priceMin
   draftFilters.priceMax = nextFilters.priceMax
   draftFilters.transmission = nextFilters.transmission
+}
+
+function toSentenceCase(value: string) {
+  if (!value) {
+    return ''
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+function toFilterOption(value: string): FilterOption {
+  return {
+    value,
+    label: toSentenceCase(value),
+  }
+}
+
+function buildUniqueFilterOptions(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, 'ru'))
+    .map((value) => toFilterOption(value))
 }
 
 function buildCatalogQuery(filters: FilterDraftState, searchQuery: string): CarsCatalogQuery {
@@ -271,12 +301,32 @@ function buildCatalogQuery(filters: FilterDraftState, searchQuery: string): Cars
     fuel_type: filters.fuelType || undefined,
     transmission: filters.transmission || undefined,
     body_type: filters.bodyType || undefined,
-    seats_min: filters.seatsMin ?? undefined,
+    seats_count: filters.seatsCount ?? undefined,
     price_min: filters.priceMin ?? undefined,
     price_max: filters.priceMax ?? undefined,
     purpose: filters.purpose || undefined,
     limit: 100,
     offset: 0,
+  }
+}
+
+async function loadFilterOptions() {
+  try {
+    const response = await getCarsCatalog({
+      limit: 100,
+      offset: 0,
+    })
+
+    const items = response.items
+    brandOptions.value = buildUniqueFilterOptions(items.map((item) => item.brand))
+    purposeOptions.value = buildUniqueFilterOptions(items.map((item) => item.purpose))
+    fuelTypeOptions.value = buildUniqueFilterOptions(items.map((item) => item.fuel_type))
+    bodyTypeOptions.value = buildUniqueFilterOptions(items.map((item) => item.body_type))
+    transmissionOptions.value = buildUniqueFilterOptions(items.map((item) => item.transmission))
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'AbortError')) {
+      console.error('Failed to load filter options', error)
+    }
   }
 }
 
@@ -308,6 +358,7 @@ function applyFilters() {
   appliedFilters.value = snapshotDraftFilters()
   const query = buildCatalogQuery(appliedFilters.value, search.value)
   activeQuery.value = query
+  window.scrollTo({ top: 0, behavior: 'smooth' })
   void loadCatalog(query)
 }
 
@@ -354,6 +405,7 @@ onMounted(() => {
     void favoritesStore.ensureLoaded()
   }
 
+  void loadFilterOptions()
   void loadCatalog(activeQuery.value)
 })
 

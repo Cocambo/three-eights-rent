@@ -44,7 +44,7 @@ func (h *CarHandler) List(c *gin.Context) {
 		FuelType:     req.FuelType,
 		Transmission: req.Transmission,
 		BodyType:     req.BodyType,
-		SeatsMin:     req.SeatsMin,
+		SeatsCount:   req.SeatsCount,
 		PriceMin:     req.PriceMin,
 		PriceMax:     req.PriceMax,
 		Purpose:      req.Purpose,

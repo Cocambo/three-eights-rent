@@ -20,7 +20,7 @@ type CarFilter struct {
 	FuelType     string
 	Transmission string
 	BodyType     string
-	SeatsMin     *int
+	SeatsCount   *int
 	PriceMin     *int64
 	PriceMax     *int64
 	Purpose      string

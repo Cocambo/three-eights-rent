@@ -50,7 +50,7 @@ type CatalogFilter struct {
 	FuelType     string
 	Transmission string
 	BodyType     string
-	SeatsMin     *int
+	SeatsCount   *int
 	PriceMin     *int64
 	PriceMax     *int64
 	Purpose      string
@@ -142,7 +142,7 @@ type normalizedCatalogFilter struct {
 	FuelType     string
 	Transmission string
 	BodyType     string
-	SeatsMin     *int
+	SeatsCount   *int
 	PriceMin     *int64
 	PriceMax     *int64
 	Purpose      string
@@ -180,7 +180,7 @@ func (s *carService) GetCatalog(
 		FuelType:     normalized.FuelType,
 		Transmission: normalized.Transmission,
 		BodyType:     normalized.BodyType,
-		SeatsMin:     normalized.SeatsMin,
+		SeatsCount:   normalized.SeatsCount,
 		PriceMin:     normalized.PriceMin,
 		PriceMax:     normalized.PriceMax,
 		Purpose:      normalized.Purpose,
@@ -365,7 +365,7 @@ func normalizeCatalogFilter(filter CatalogFilter) (normalizedCatalogFilter, erro
 		FuelType:     filter.FuelType,
 		Transmission: filter.Transmission,
 		BodyType:     filter.BodyType,
-		SeatsMin:     filter.SeatsMin,
+		SeatsCount:   filter.SeatsCount,
 		PriceMin:     filter.PriceMin,
 		PriceMax:     filter.PriceMax,
 		Purpose:      filter.Purpose,

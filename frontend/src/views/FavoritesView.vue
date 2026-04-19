@@ -4,14 +4,7 @@
 
     <main class="favorites-page__main">
       <section class="favorites-section">
-        <div class="favorites-section__header">
-          <span class="favorites-section__eyebrow">Избранное</span>
-          <h1 class="favorites-section__title">Сохраненные автомобили</h1>
-          <p class="favorites-section__text">
-            Здесь собраны автомобили, которые вы отметили как избранные.
-          </p>
-        </div>
-
+    
         <div v-if="favoritesStore.isLoading" class="favorites-state">
           <h2>Загружаем избранное</h2>
           <p>Получаем сохраненные автомобили из car-service.</p>

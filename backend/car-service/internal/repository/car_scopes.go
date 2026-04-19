@@ -29,7 +29,7 @@ func carCatalogFilterScopes(filter CarFilter) []func(*gorm.DB) *gorm.DB {
 		scopeCatalogFuelType(filter.FuelType),
 		scopeCatalogTransmission(filter.Transmission),
 		scopeCatalogBodyType(filter.BodyType),
-		scopeCatalogSeatsMin(filter.SeatsMin),
+		scopeCatalogSeatsCount(filter.SeatsCount),
 		scopeCatalogPriceMin(filter.PriceMin),
 		scopeCatalogPriceMax(filter.PriceMax),
 		scopeCatalogPurpose(filter.Purpose),
@@ -127,13 +127,13 @@ func scopeCatalogBodyType(bodyType string) func(*gorm.DB) *gorm.DB {
 	}
 }
 
-func scopeCatalogSeatsMin(seatsMin *int) func(*gorm.DB) *gorm.DB {
+func scopeCatalogSeatsCount(seatsCount *int) func(*gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		if seatsMin == nil {
+		if seatsCount == nil {
 			return db
 		}
 
-		return db.Where("cars.seats_count >= ?", *seatsMin)
+		return db.Where("cars.seats_count = ?", *seatsCount)
 	}
 }
 

@@ -15,7 +15,7 @@ export interface CarsCatalogQuery {
   fuel_type?: string
   transmission?: string
   body_type?: string
-  seats_min?: number
+  seats_count?: number
   price_min?: number
   price_max?: number
   purpose?: string
@@ -99,6 +99,25 @@ export function mapCarCatalogItemToCardModel(item: CarCatalogItem): CarCatalogCa
   }
 }
 
+function decodePreEncodedQueryValue(value: string) {
+  let normalized = value.trim()
+
+  for (let index = 0; index < 2 && normalized.includes('%'); index += 1) {
+    try {
+      const decoded = decodeURIComponent(normalized)
+      if (decoded === normalized) {
+        break
+      }
+
+      normalized = decoded.trim()
+    } catch {
+      break
+    }
+  }
+
+  return normalized
+}
+
 function buildCarsCatalogPath(query: CarsCatalogQuery) {
   const params = new URLSearchParams()
 
@@ -108,7 +127,14 @@ function buildCarsCatalogPath(query: CarsCatalogQuery) {
       continue
     }
 
-    params.set(key, String(value))
+    const normalizedValue =
+      typeof value === 'string' ? decodePreEncodedQueryValue(value) : String(value)
+
+    if (normalizedValue === '') {
+      continue
+    }
+
+    params.set(key, normalizedValue)
   }
 
   const search = params.toString()

@@ -21,7 +21,7 @@ type ListCarsQuery struct {
 	FuelType     string `form:"fuel_type" binding:"omitempty,max=50"`
 	Transmission string `form:"transmission" binding:"omitempty,max=50"`
 	BodyType     string `form:"body_type" binding:"omitempty,max=50"`
-	SeatsMin     *int   `form:"seats_min" binding:"omitempty,gt=0"`
+	SeatsCount   *int   `form:"seats_count" binding:"omitempty,gt=0"`
 	PriceMin     *int64 `form:"price_min" binding:"omitempty,gte=0"`
 	PriceMax     *int64 `form:"price_max" binding:"omitempty,gte=0"`
 	Purpose      string `form:"purpose" binding:"omitempty,max=100"`
