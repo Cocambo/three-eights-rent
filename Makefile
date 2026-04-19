@@ -1,5 +1,5 @@
 COMPOSE ?= docker compose
-APP_SERVICES := postgres user-service api-gateway frontend
+APP_SERVICES := postgres minio user-service car-service api-gateway frontend
 
 .PHONY: build migrate run up stop down restart logs ps
 
@@ -8,7 +8,9 @@ build:
 
 migrate:
 	$(COMPOSE) up -d postgres
-	$(COMPOSE) --profile tools run --rm migrate
+	$(COMPOSE) run --rm postgres-setup
+	$(COMPOSE) run --rm migrate-user-service
+	$(COMPOSE) run --rm migrate-car-service
 
 run: build migrate
 	$(COMPOSE) up -d $(APP_SERVICES)

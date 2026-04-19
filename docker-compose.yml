@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: user_service
+      POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -10,31 +10,85 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d user_service"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 5s
     restart: unless-stopped
 
-  migrate:
-    image: migrate/migrate:v4.18.3
-    profiles: ["tools"]
+  postgres-setup:
+    image: postgres:16-alpine
     depends_on:
       postgres:
         condition: service_healthy
+    environment:
+      PGPASSWORD: postgres
+    command:
+      - sh
+      - -ec
+      - |
+        psql -h postgres -U postgres -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'user_service'" | grep -q 1 || psql -h postgres -U postgres -d postgres -c "CREATE DATABASE user_service";
+        psql -h postgres -U postgres -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'car_service'" | grep -q 1 || psql -h postgres -U postgres -d postgres -c "CREATE DATABASE car_service";
+    restart: "no"
+
+  migrate-user-service:
+    image: migrate/migrate:v4.18.3
+    depends_on:
+      postgres-setup:
+        condition: service_completed_successfully
     volumes:
       - ./backend/user-service/migrations:/migrations:ro
     command:
       - "-path=/migrations"
       - "-database=postgres://postgres:postgres@postgres:5432/user_service?sslmode=disable"
       - "up"
+    restart: "no"
+
+  migrate-car-service:
+    image: migrate/migrate:v4.18.3
+    depends_on:
+      postgres-setup:
+        condition: service_completed_successfully
+    volumes:
+      - ./backend/car-service/migrations:/migrations:ro
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://postgres:postgres@postgres:5432/car_service?sslmode=disable"
+      - "up"
+    restart: "no"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+  minio-setup:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        until mc alias set local http://minio:9000 minioadmin minioadmin; do
+          sleep 1
+        done
+        mc mb --ignore-existing local/car-images
+    restart: "no"
 
   user-service:
     build:
       context: ./backend/user-service
-    env_file:
-      - ./backend/user-service/.env
     environment:
       SERVER_PORT: 8081
       DB_HOST: postgres
@@ -44,9 +98,13 @@ services:
       DB_NAME: user_service
       DB_SSLMODE: disable
       DB_TIMEZONE: UTC
+      JWT_ACCESS_SECRET: dev-access-secret
+      JWT_REFRESH_SECRET: dev-refresh-secret
+      JWT_ACCESS_TTL: 20m
+      JWT_REFRESH_TTL: 720h
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate-user-service:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/api/v1/health > /dev/null || exit 1"]
       interval: 10s
@@ -57,18 +115,58 @@ services:
       - "8081:8081"
     restart: unless-stopped
 
+  car-service:
+    build:
+      context: ./backend/car-service
+    environment:
+      APP_ENV: development
+      SERVER_PORT: 8082
+      GIN_MODE: debug
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: car_service
+      DB_SSLMODE: disable
+      DB_MAX_IDLE_CONNS: 10
+      DB_MAX_OPEN_CONNS: 25
+      DB_CONN_MAX_LIFETIME: 1h
+      DB_CONN_MAX_IDLE_TIME: 15m
+      JWT_ACCESS_SECRET: dev-access-secret
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_USE_SSL: "false"
+      MINIO_DEFAULT_BUCKET: car-images
+      MINIO_PRESIGN_TTL: 15m
+    depends_on:
+      migrate-car-service:
+        condition: service_completed_successfully
+      minio-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8082/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+
   api-gateway:
     build:
       context: ./backend/api-gateway-service
-    env_file:
-      - ./backend/api-gateway-service/.env
     environment:
       SERVER_PORT: 8080
       GIN_MODE: debug
       JWT_ACCESS_SECRET: dev-access-secret
       USER_SERVICE_URL: http://user-service:8081
+      CAR_SERVICE_URL: http://car-service:8082
     depends_on:
       user-service:
+        condition: service_healthy
+      car-service:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health > /dev/null || exit 1"]
@@ -98,3 +196,4 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:

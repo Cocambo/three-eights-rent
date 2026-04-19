@@ -13,6 +13,7 @@ type Config struct {
 	GinMode         string
 	JWTAccessSecret string
 	UserServiceURL  string
+	CarServiceURL   string
 }
 
 func Load() (*Config, error) {
@@ -23,6 +24,7 @@ func Load() (*Config, error) {
 		GinMode:         getEnv("GIN_MODE", "debug"),
 		JWTAccessSecret: os.Getenv("JWT_ACCESS_SECRET"),
 		UserServiceURL:  os.Getenv("USER_SERVICE_URL"),
+		CarServiceURL:   os.Getenv("CAR_SERVICE_URL"),
 	}
 
 	if cfg.JWTAccessSecret == "" {
@@ -36,6 +38,15 @@ func Load() (*Config, error) {
 	parsedURL, err := url.Parse(cfg.UserServiceURL)
 	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
 		return nil, fmt.Errorf("USER_SERVICE_URL must be a valid absolute URL")
+	}
+
+	if cfg.CarServiceURL == "" {
+		return nil, fmt.Errorf("CAR_SERVICE_URL is required")
+	}
+
+	parsedURL, err = url.Parse(cfg.CarServiceURL)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return nil, fmt.Errorf("CAR_SERVICE_URL must be a valid absolute URL")
 	}
 
 	return cfg, nil
