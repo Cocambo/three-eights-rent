@@ -83,7 +83,9 @@
               <div class="hero-copy__header">
                 <div>
                   <h1>{{ carTitle }}</h1>
-                  <p class="hero-copy__text">{{ car.description || 'Описание для этого автомобиля пока не добавлено.' }}</p>
+                  <p class="hero-copy__text">
+                    {{ car.description || 'Описание для этого автомобиля пока не добавлено.' }}
+                  </p>
                 </div>
 
                 <button
@@ -169,50 +171,65 @@
               </div>
             </div>
 
-            <div class="booking-card__fields">
-              <label class="booking-field">
-                <span>Дата начала</span>
-                <input v-model="bookingForm.startDate" :min="today" type="date" />
-              </label>
-
-              <label class="booking-field">
-                <span>Дата завершения</span>
-                <input v-model="bookingForm.endDate" :min="bookingForm.startDate || today" type="date" />
-              </label>
-            </div>
-
             <div class="booking-summary" :class="bookingState.toneClass">
-              <template v-if="bookingState.ready">
-                <p class="booking-summary__title">{{ bookingState.title }}</p>
-                <p class="booking-summary__text">{{ bookingState.description }}</p>
-                <div class="booking-summary__price">
-                  <span>{{ bookingState.days }} суток</span>
-                  <strong>{{ formatPrice(bookingState.totalPrice) }}</strong>
-                </div>
-              </template>
-              <template v-else>
-                <p class="booking-summary__title">{{ bookingState.title }}</p>
-                <p class="booking-summary__text">{{ bookingState.description }}</p>
-              </template>
+              <p class="booking-summary__title">{{ bookingState.title }}</p>
+              <p class="booking-summary__text">{{ bookingState.description }}</p>
+              <div v-if="bookingState.ready" class="booking-summary__price">
+                <span>{{ bookingState.days }} суток</span>
+                <strong>{{ formatPrice(bookingState.totalPrice) }}</strong>
+              </div>
             </div>
 
-            <button
-              class="booking-button"
-              type="button"
-              :disabled="!bookingState.ready"
-              @click="submitBooking"
-            >
-              Забронировать
-            </button>
+            <template v-if="authStore.isAuthenticated">
+              <div class="booking-card__fields">
+                <label class="booking-field">
+                  <span>Дата начала</span>
+                  <input v-model="bookingForm.startDate" :min="today" type="date" />
+                </label>
 
-            <p class="booking-note">
-              <span class="material-symbols-outlined">verified_user</span>
-              Онлайн-бронирование пока работает как интерфейс-заглушка и не отправляет заявку в backend.
-            </p>
+                <label class="booking-field">
+                  <span>Дата завершения</span>
+                  <input v-model="bookingForm.endDate" :min="bookingForm.startDate || today" type="date" />
+                </label>
+              </div>
 
-            <div v-if="bookingResult" class="booking-result">
-              <h3>Заглушка бронирования</h3>
+              <p class="booking-note">
+                <span class="material-symbols-outlined">event_available</span>
+                Доступность дат проверяется на сервере в момент бронирования.
+              </p>
+
+              <button
+                class="booking-button"
+                type="button"
+                :disabled="!bookingState.ready || isBookingSubmitting"
+                @click="submitBooking"
+              >
+                {{ isBookingSubmitting ? 'Оформляем...' : 'Забронировать' }}
+              </button>
+            </template>
+
+            <template v-else>
+              <div class="booking-guest">
+                <p class="booking-guest__text">
+                  Вы сможете выбрать даты и оформить бронь сразу после авторизации.
+                </p>
+                <RouterLink class="booking-login-link" :to="loginLink">
+                  Войти, чтобы забронировать
+                </RouterLink>
+              </div>
+            </template>
+
+            <div v-if="bookingErrorMessage" class="booking-result booking-result--error">
+              <h3>Бронирование не создано</h3>
+              <p>{{ bookingErrorMessage }}</p>
+            </div>
+
+            <div v-if="bookingResult" class="booking-result booking-result--success">
+              <h3>Бронирование оформлено</h3>
               <p>{{ bookingResult }}</p>
+              <RouterLink class="booking-result__link" :to="{ name: 'profile' }">
+                Перейти в историю бронирований
+              </RouterLink>
             </div>
           </aside>
         </div>
@@ -242,6 +259,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import { createBooking, getBookingErrorMessage } from '@/services/bookings'
 import type { CarDetailsResponse } from '@/services/cars'
 import { getCarDetails } from '@/services/cars'
 import { ApiError, useAuthStore } from '@/stores/auth'
@@ -259,6 +277,8 @@ const selectedImageIndex = ref(0)
 const thumbnailWindowStart = ref(0)
 const lightboxOpen = ref(false)
 const bookingResult = ref('')
+const bookingErrorMessage = ref('')
+const isBookingSubmitting = ref(false)
 const visibleThumbCount = 4
 const today = getToday()
 
@@ -294,6 +314,12 @@ const isFavorite = computed(() => (car.value ? favoritesStore.isFavorite(car.val
 const favoriteButtonLabel = computed(() =>
   isFavorite.value ? 'Удалить из избранного' : 'Добавить в избранное',
 )
+const loginLink = computed(() => ({
+  name: 'login' as const,
+  query: {
+    redirect: route.fullPath,
+  },
+}))
 
 const primaryFeatures = computed(() => {
   if (!car.value) {
@@ -317,6 +343,17 @@ const bookingState = computed(() => {
       days: 0,
       totalPrice: 0,
       toneClass: 'booking-summary--muted',
+    }
+  }
+
+  if (!authStore.isAuthenticated) {
+    return {
+      ready: false,
+      title: 'Бронирование доступно после входа',
+      description: 'Авторизуйтесь, чтобы выбрать даты, оформить бронь и видеть её историю в профиле.',
+      days: 0,
+      totalPrice: 0,
+      toneClass: 'booking-summary--info',
     }
   }
 
@@ -397,12 +434,7 @@ async function handleFavoriteClick() {
   }
 
   if (!authStore.isAuthenticated) {
-    await router.push({
-      name: 'login',
-      query: {
-        redirect: route.fullPath,
-      },
-    })
+    await router.push(loginLink.value)
     return
   }
 
@@ -410,6 +442,41 @@ async function handleFavoriteClick() {
     await favoritesStore.toggleFavorite(car.value.id)
   } catch {
     // The store keeps the latest backend error for views that need it.
+  }
+}
+
+async function submitBooking() {
+  if (!car.value || !bookingState.value.ready || isBookingSubmitting.value) {
+    return
+  }
+
+  bookingErrorMessage.value = ''
+  bookingResult.value = ''
+
+  try {
+    isBookingSubmitting.value = true
+
+    await createBooking(authStore.authorizedRequest, {
+      car_id: car.value.id,
+      start_date: toApiDateTime(bookingForm.startDate),
+      end_date: toApiDateTime(bookingForm.endDate),
+    })
+
+    bookingResult.value =
+      `${carTitle.value} забронирован с ${formatDate(bookingForm.startDate)} по ${formatDate(bookingForm.endDate)}. ` +
+      'Теперь бронь можно отслеживать и отменять в профиле.'
+
+    bookingForm.startDate = ''
+    bookingForm.endDate = ''
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      await router.push(loginLink.value)
+      return
+    }
+
+    bookingErrorMessage.value = getBookingErrorMessage(error, 'Не удалось создать бронирование.')
+  } finally {
+    isBookingSubmitting.value = false
   }
 }
 
@@ -458,21 +525,12 @@ function scrollThumbsNext() {
   )
 }
 
-function submitBooking() {
-  if (!car.value || !bookingState.value.ready) {
-    return
-  }
-
-  bookingResult.value =
-    `Заявка-заглушка создана: ${carTitle.value}, ${formatDate(bookingForm.startDate)} - ${formatDate(bookingForm.endDate)}, ` +
-    `${bookingState.value.days} суток, сумма ${formatPrice(bookingState.value.totalPrice)}. Позже сюда можно подключить backend бронирования.`
-}
-
 watch(
   () => route.params.id,
   () => {
     closeLightbox()
     bookingResult.value = ''
+    bookingErrorMessage.value = ''
     bookingForm.startDate = ''
     bookingForm.endDate = ''
     void loadCar()
@@ -526,6 +584,10 @@ function getToday() {
 
   return normalized.toISOString().slice(0, 10)
 }
+
+function toApiDateTime(dateString: string) {
+  return `${dateString}T00:00:00.000Z`
+}
 </script>
 
 <style scoped>
@@ -574,7 +636,9 @@ function getToday() {
 .lightbox__close,
 .lightbox__nav,
 .favorite-button,
-.booking-button {
+.booking-button,
+.booking-login-link,
+.booking-result__link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -584,7 +648,9 @@ function getToday() {
 }
 
 .state-button,
-.not-found__link {
+.not-found__link,
+.booking-login-link,
+.booking-result__link {
   min-height: 48px;
   margin-top: 24px;
   padding: 0 20px;
@@ -814,7 +880,8 @@ function getToday() {
 .spec-card p,
 .booking-card__top p,
 .booking-note,
-.booking-result p {
+.booking-result p,
+.booking-guest__text {
   margin: 0;
   color: #60707f;
 }
@@ -930,6 +997,10 @@ function getToday() {
   background: #f2f6fb;
 }
 
+.booking-summary--info {
+  background: rgba(22, 63, 119, 0.08);
+}
+
 .booking-summary--success {
   background: rgba(105, 255, 135, 0.16);
 }
@@ -975,15 +1046,38 @@ function getToday() {
   line-height: 1.6;
 }
 
+.booking-guest {
+  display: grid;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.booking-login-link {
+  margin-top: 0;
+}
+
 .booking-result {
+  display: grid;
+  gap: 10px;
   padding: 18px;
   border-radius: 20px;
+}
+
+.booking-result--success {
   background: #edf4ff;
 }
 
+.booking-result--error {
+  background: #fff0ee;
+}
+
 .booking-result p {
-  margin-top: 10px;
   line-height: 1.7;
+}
+
+.booking-result__link {
+  width: 100%;
+  margin-top: 4px;
 }
 
 .lightbox {
