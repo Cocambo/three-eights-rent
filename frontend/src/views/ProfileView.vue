@@ -109,6 +109,30 @@
         </div>
       </section>
 
+      <p v-if="feedbackMessage" :class="feedbackClass">
+        {{ feedbackMessage }}
+      </p>
+
+      <div class="profile-actions">
+        <button
+          class="profile-actions__logout"
+          type="button"
+          :disabled="isLoggingOut"
+          @click="handleLogout"
+        >
+          {{ isLoggingOut ? 'Выходим...' : 'Выйти' }}
+        </button>
+
+        <button
+          class="profile-actions__save"
+          type="button"
+          :disabled="!hasUnsavedChanges || isSaving || authStore.isProfileLoading"
+          @click="saveProfile"
+        >
+          {{ isSaving ? 'Сохраняем...' : 'Сохранить изменения' }}
+        </button>
+      </div>
+
       <section class="bookings-card">
         <div class="section-title section-title--space">
           <div class="section-title__copy">
@@ -229,30 +253,6 @@
           </article>
         </div>
       </section>
-
-      <p v-if="feedbackMessage" :class="feedbackClass">
-        {{ feedbackMessage }}
-      </p>
-
-      <div class="profile-actions">
-        <button
-          class="profile-actions__logout"
-          type="button"
-          :disabled="isLoggingOut"
-          @click="handleLogout"
-        >
-          {{ isLoggingOut ? 'Выходим...' : 'Выйти' }}
-        </button>
-
-        <button
-          class="profile-actions__save"
-          type="button"
-          :disabled="isSaving || authStore.isProfileLoading"
-          @click="saveProfile"
-        >
-          {{ isSaving ? 'Сохраняем...' : 'Сохранить изменения' }}
-        </button>
-      </div>
     </main>
 
     <AppFooter />
@@ -310,6 +310,10 @@ const bookingActionClass = computed(() =>
     ? 'profile-feedback profile-feedback--success'
     : 'profile-feedback profile-feedback--error',
 )
+
+const hasUnsavedChanges = computed(() => {
+  return JSON.stringify(getCurrentFormSnapshot()) !== JSON.stringify(getStoredFormSnapshot())
+})
 
 const fillFormFromStore = () => {
   form.firstName = authStore.profile?.first_name || ''
@@ -535,6 +539,30 @@ function formatPrice(price: number) {
 
 function toDateKey(value: string) {
   return value.slice(0, 10)
+}
+
+function getStoredFormSnapshot() {
+  return {
+    firstName: authStore.profile?.first_name || '',
+    lastName: authStore.profile?.last_name || '',
+    birthDate: formatDateForInput(authStore.profile?.birth_date),
+    licenseNumber: authStore.driverLicense?.license_number || '',
+    issueDate: formatDateForInput(authStore.driverLicense?.issued_at),
+    expirationDate: formatDateForInput(authStore.driverLicense?.expires_at),
+    categories: [...(authStore.driverLicense?.categories.map((category) => category.category_code) || [])].sort(),
+  }
+}
+
+function getCurrentFormSnapshot() {
+  return {
+    firstName: form.firstName.trim(),
+    lastName: form.lastName.trim(),
+    birthDate: form.birthDate,
+    licenseNumber: form.licenseNumber.trim(),
+    issueDate: form.issueDate,
+    expirationDate: form.expirationDate,
+    categories: [...form.categories].sort(),
+  }
 }
 
 onMounted(() => {
