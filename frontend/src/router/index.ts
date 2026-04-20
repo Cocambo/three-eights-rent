@@ -6,6 +6,7 @@ import RegisterView from '../views/RegisterView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import CarsView from '../views/CarsView.vue'
 import FavoritesView from '../views/FavoritesView.vue'
+import CarDetailsView from '../views/CarDetailsView.vue'
 import { pinia } from '@/stores'
 import { useAuthStore } from '@/stores/auth'
 
@@ -39,6 +40,11 @@ const router = createRouter({
             path: '/cars',
             name: 'cars',
             component: CarsView,
+        },
+        {
+            path: '/cars/:id',
+            name: 'car-details',
+            component: CarDetailsView,
         },
         {
             path: '/favorites',

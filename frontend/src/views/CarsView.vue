@@ -12,27 +12,37 @@
         <div class="filters-list">
           <div class="filter-group">
             <label class="filter-label" for="brand">Марка автомобиля</label>
-            <select id="brand" v-model="filters.brand" class="field">
+            <select id="brand" v-model="draftFilters.brand" class="field">
               <option value="">Все марки</option>
-              <option v-for="brand in brands" :key="brand" :value="brand">
-                {{ brand }}
+              <option v-for="brand in brandOptions" :key="brand.value" :value="brand.value">
+                {{ brand.label }}
               </option>
             </select>
           </div>
 
           <div class="filter-group">
             <p class="filter-label">Назначение</p>
-            <label v-for="purpose in purposes" :key="purpose" class="checkbox-row">
-              <input v-model="filters.purposes" type="checkbox" :value="purpose" />
-              <span>{{ purpose }}</span>
+            <label v-for="purpose in purposeOptions" :key="purpose.value" class="checkbox-row">
+              <input
+                :checked="draftFilters.purpose === purpose.value"
+                type="checkbox"
+                :value="purpose.value"
+                @change="toggleSingleValueFilter('purpose', purpose.value)"
+              />
+              <span>{{ purpose.label }}</span>
             </label>
           </div>
 
           <div class="filter-group">
             <p class="filter-label">Тип топлива</p>
-            <label v-for="fuel in fuelTypes" :key="fuel" class="checkbox-row">
-              <input v-model="filters.fuelTypes" type="checkbox" :value="fuel" />
-              <span>{{ fuel }}</span>
+            <label v-for="fuel in fuelTypeOptions" :key="fuel.value" class="checkbox-row">
+              <input
+                :checked="draftFilters.fuelType === fuel.value"
+                type="checkbox"
+                :value="fuel.value"
+                @change="toggleSingleValueFilter('fuelType', fuel.value)"
+              />
+              <span>{{ fuel.label }}</span>
             </label>
           </div>
 
@@ -42,20 +52,20 @@
               <button
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.bodyType === '' }"
-                @click="filters.bodyType = ''"
+                :class="{ 'chip--active': draftFilters.bodyType === '' }"
+                @click="draftFilters.bodyType = ''"
               >
                 Все
               </button>
               <button
-                v-for="bodyType in bodyTypes"
-                :key="bodyType"
+                v-for="bodyType in bodyTypeOptions"
+                :key="bodyType.value"
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.bodyType === bodyType }"
-                @click="filters.bodyType = bodyType"
+                :class="{ 'chip--active': draftFilters.bodyType === bodyType.value }"
+                @click="draftFilters.bodyType = bodyType.value"
               >
-                {{ bodyType }}
+                {{ bodyType.label }}
               </button>
             </div>
           </div>
@@ -66,8 +76,8 @@
               <button
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.seats === null }"
-                @click="filters.seats = null"
+                :class="{ 'chip--active': draftFilters.seatsCount === null }"
+                @click="draftFilters.seatsCount = null"
               >
                 Все
               </button>
@@ -76,8 +86,8 @@
                 :key="seat.value"
                 type="button"
                 class="chip"
-                :class="{ 'chip--active': filters.seats === seat.value }"
-                @click="filters.seats = seat.value"
+                :class="{ 'chip--active': draftFilters.seatsCount === seat.value }"
+                @click="draftFilters.seatsCount = seat.value"
               >
                 {{ seat.label }}
               </button>
@@ -88,14 +98,14 @@
             <p class="filter-label">Цена в сутки (₽)</p>
             <div class="price-grid">
               <input
-                v-model.number="filters.priceFrom"
+                v-model.number="draftFilters.priceMin"
                 type="number"
                 class="field"
                 placeholder="От"
                 min="0"
               />
               <input
-                v-model.number="filters.priceTo"
+                v-model.number="draftFilters.priceMax"
                 type="number"
                 class="field"
                 placeholder="До"
@@ -106,14 +116,23 @@
 
           <div class="filter-group">
             <p class="filter-label">КПП</p>
-            <label v-for="transmission in transmissions" :key="transmission" class="checkbox-row">
-              <input v-model="filters.transmissions" type="checkbox" :value="transmission" />
-              <span>{{ transmission }}</span>
+            <label
+              v-for="transmission in transmissionOptions"
+              :key="transmission.value"
+              class="checkbox-row"
+            >
+              <input
+                :checked="draftFilters.transmission === transmission.value"
+                type="checkbox"
+                :value="transmission.value"
+                @change="toggleSingleValueFilter('transmission', transmission.value)"
+              />
+              <span>{{ transmission.label }}</span>
             </label>
           </div>
         </div>
 
-        <button class="primary-button" type="button">Применить</button>
+        <button class="primary-button" type="button" @click="applyFilters">Применить</button>
       </aside>
 
       <section class="catalog-content">
@@ -121,77 +140,26 @@
           <div>
             <h1>Доступные автомобили</h1>
           </div>
-          <span class="catalog-count">Найдено {{ filteredCars.length }} моделей</span>
+          <span class="catalog-count">Найдено {{ pagination.total }} моделей</span>
         </div>
 
-        <div class="cars-grid">
-          <article v-for="car in filteredCars" :key="car.id" class="car-card">
-            <div class="car-card__image-wrap">
-              <img :src="car.image" :alt="car.name" class="car-card__image" />
-
-              <button class="favorite-button" type="button" aria-label="Добавить в избранное">
-                <span class="material-symbols-outlined">
-                  {{ car.favorite ? 'favorite' : 'favorite' }}
-                </span>
-              </button>
-
-              <!-- <div class="car-card__badges">
-                                <span v-for="badge in car.tags" :key="badge" class="badge">
-                                    {{ badge }}
-                                </span>
-                            </div> -->
-            </div>
-
-            <div class="car-card__body">
-              <div class="car-card__top">
-                <div>
-                  <h3>{{ car.name }}</h3>
-                  <p>{{ car.category }}</p>
-                </div>
-                <div class="car-card__meta">
-                  <div class="car-card__price">
-                    <strong>{{ formatPrice(car.pricePerDay) }}</strong>
-                    <span>в сутки</span>
-                  </div>
-                  <div v-if="car.tags?.length" class="car-card__badges car-card__badges--stacked">
-                    <span
-                      v-for="badge in car.tags"
-                      :key="badge"
-                      class="badge"
-                      :class="{
-                        'badge--premium': badge.toLowerCase() === 'premium',
-                      }"
-                    >
-                      {{ badge }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="car-card__specs">
-                <div class="spec-item">
-                  <span class="material-symbols-outlined">group</span>
-                  <span>{{ car.seats }}</span>
-                </div>
-                <div class="spec-item">
-                  <span class="material-symbols-outlined">luggage</span>
-                  <span>{{ car.luggage }}</span>
-                </div>
-                <div class="spec-item">
-                  <span class="material-symbols-outlined">settings_suggest</span>
-                  <span>{{ car.transmission }}</span>
-                </div>
-              </div>
-
-              <button class="secondary-button" type="button">Подробнее</button>
-            </div>
-          </article>
+        <div v-if="isLoading" class="catalog-state">
+          <h3>Загружаем каталог</h3>
+          <p>Получаем актуальные автомобили из car-service.</p>
         </div>
 
-        <div v-if="!filteredCars.length" class="empty-state">
+        <div v-else-if="errorMessage" class="catalog-state catalog-state--error">
+          <h3>Не удалось загрузить каталог</h3>
+          <p>{{ errorMessage }}</p>
+          <button class="state-button" type="button" @click="reloadCatalog">Повторить</button>
+        </div>
+
+        <div v-else-if="!cars.length" class="catalog-state">
           <h3>По вашему запросу ничего не найдено</h3>
           <p>Попробуйте изменить фильтры или сбросить параметры поиска.</p>
         </div>
+
+        <CarCatalogList v-else :cars="carCards" />
       </section>
     </main>
 
@@ -199,197 +167,258 @@
   </section>
 </template>
 
-<script setup>
-import { computed, reactive, ref } from 'vue'
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import CarCatalogList from '@/components/CarCatalogList.vue'
+import {
+  getCarsCatalog,
+  mapCarCatalogItemToCardModel,
+  type CarCatalogItem,
+  type CarsCatalogQuery,
+  type PaginationMeta,
+} from '@/services/cars'
+import { useAuthStore } from '@/stores/auth'
+import { useFavoritesStore } from '@/stores/favorites'
 
-const search = ref('')
+interface FilterDraftState {
+  brand: string
+  purpose: string
+  fuelType: string
+  bodyType: string
+  seatsCount: number | null
+  priceMin: number | null
+  priceMax: number | null
+  transmission: string
+}
 
-const brands = ['BMW', 'Mercedes-Benz', 'Audi', 'Porsche']
-const purposes = ['Для повседневной езды', 'Торжество', 'Деловые', 'Путешествия', 'Эксклюзив']
-const fuelTypes = ['Бензин', 'Дизель', 'Электро', 'Гибрид']
-const bodyTypes = ['Седан', 'SUV', 'Купе']
-const transmissions = ['АКПП', 'МКПП']
+interface FilterOption {
+  value: string
+  label: string
+}
+
+const defaultPagination: PaginationMeta = {
+  total: 0,
+  limit: 100,
+  offset: 0,
+}
+
 const seatsOptions = [
   { label: '2', value: 2 },
   { label: '4', value: 4 },
   { label: '5', value: 5 },
-  { label: '7+', value: 7 },
+  { label: '7', value: 7 },
 ]
 
-const filters = reactive({
-  brand: '',
-  purposes: [],
-  fuelTypes: [],
-  bodyType: '',
-  seats: null,
-  priceFrom: null,
-  priceTo: null,
-  transmissions: [],
+function createDefaultDraftFilters(): FilterDraftState {
+  return {
+    brand: '',
+    purpose: '',
+    fuelType: '',
+    bodyType: '',
+    seatsCount: null,
+    priceMin: null,
+    priceMax: null,
+    transmission: '',
+  }
+}
+
+const search = ref('')
+const cars = ref<CarCatalogItem[]>([])
+const pagination = ref<PaginationMeta>(defaultPagination)
+const isLoading = ref(false)
+const errorMessage = ref('')
+const brandOptions = ref<FilterOption[]>([])
+const purposeOptions = ref<FilterOption[]>([])
+const fuelTypeOptions = ref<FilterOption[]>([])
+const bodyTypeOptions = ref<FilterOption[]>([])
+const transmissionOptions = ref<FilterOption[]>([])
+const draftFilters = reactive<FilterDraftState>(createDefaultDraftFilters())
+const appliedFilters = ref<FilterDraftState>(createDefaultDraftFilters())
+const activeQuery = ref<CarsCatalogQuery>({
+  limit: 100,
+  offset: 0,
 })
+const authStore = useAuthStore()
+const favoritesStore = useFavoritesStore()
 
-const cars = ref([
-  {
-    id: 1,
-    name: 'BMW 5 Series',
-    brand: 'BMW',
-    category: 'Business Class',
-    pricePerDay: 12500,
-    seats: 5,
-    luggage: 3,
-    transmission: 'АКПП',
-    fuelType: 'Бензин',
-    bodyType: 'Седан',
-    tags: ['Деловые'],
-    purposes: ['Деловые'],
-    favorite: false,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuATbMiiFzDVbyOH4dxedupRIw8ps3h8HWNzkD-O-ajZWiK3V5HWKpK0qkRMtsdyW0mjG2dtE-zThPXm6tmLj0akHeGHQ7a3qkbElDjMSoEQaByr2Y_6_JQKfXWf7ZYGDLgI4R17mWOnIuOvm2h9GCsAXsrxySGe8tQ5NZCROtnzzRbE7OWWqyojKhEotsNIwoBvB0_zlp44KjhliOf6e79gbFoqrOr547PggsbCYK9urjHtF5RncJCs-ONW56wr-uf0Af74IKvXiAkx',
-  },
-  {
-    id: 2,
-    name: 'Audi Q7 Quattro',
-    brand: 'Audi',
-    category: 'Luxury SUV',
-    pricePerDay: 15000,
-    seats: 7,
-    luggage: 5,
-    transmission: 'АКПП',
-    fuelType: 'Дизель',
-    bodyType: 'SUV',
-    tags: ['Путешествия'],
-    purposes: ['Путешествия'],
-    favorite: true,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuALlODOR1o8SfbAHgwWxeVVp_cjVkJQYbLk5mwXOjwGf2UvAK-Gv_KkbkLjHKtR-sDVEQvGvN885JNsMzn7tGKB_7A0ElcCdyYElPnnGvztbFEVtu0q55InTyYeb8PKssRH2KEfgEHb_B8TIgiC15jWdCmMl3w5BcUx9r-styygOa7sEzz2OuJQmCkHJ7q5xE7OYREeE8wjOZ208vsjjSU7BMyNgPPuxyobfCp4fFC9szgRkYYDWvJiwObWBxQq6_UNh-8SAFYsOj49',
-  },
-  {
-    id: 3,
-    name: 'Porsche 911',
-    brand: 'Porsche',
-    category: 'Sport',
-    pricePerDay: 45000,
-    seats: 2,
-    luggage: 1,
-    transmission: 'АКПП',
-    fuelType: 'Бензин',
-    bodyType: 'Купе',
-    tags: ['Эксклюзив'],
-    purposes: ['Эксклюзив'],
-    favorite: false,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuASwknNcUmfA4vFQUcaiqzFUiEvW_pDx0HuugvPerFSaJPTbAByW913uQiTx9rLm0MeO-2ovSTunj9cFvnjO9ufcKqkskq36HUjU9yCbdzUkB1NZ13ilYHZSZOSxhAVhDnZjWEYq5rT_cKgfVLr2YFFid79GQ_pEQrz8cfrgcWaFirrnjabolwS6Ot2Ge8OnBC6x3eqW3CG4iTKro8krws0wmZTUz89doxW8U3uGgb6XEtBHraw2PaSicN_NwJiNBoKqM1m4-t7D5Wt',
-  },
-  {
-    id: 4,
-    name: 'Mercedes E-Class',
-    brand: 'Mercedes-Benz',
-    category: 'Business Class',
-    pricePerDay: 11000,
-    seats: 5,
-    luggage: 3,
-    transmission: 'АКПП',
-    fuelType: 'Гибрид',
-    bodyType: 'Седан',
-    tags: ['Торжество'],
-    purposes: ['Торжество'],
-    favorite: false,
-    image:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuDurqKFTSW23S7kbn-rtS3eYI_bHB_cPzFQDyjqCN_r2feZejL1LPGE9vPFDC92PHfeKWJ9_idAQPwFMTwpgi-FHbWRrruMj8ua2QAqz8Nkq-W3y0EemBYiQqnGdO-5gl4pkDqD_YLgo0XkfYIOWaQZjYvrXJigZQksmJ6G5V6g1h8S73ZSY3f2HbdvT0TLMZ8RXUgbu_ErA7Qko8pb3VfGKwICZcfA1glKzJUM0VFFhS3NWNpYsRUllWe9xe9zIA6wJKxImnvW8cnX',
-  },
-])
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+let currentController: AbortController | null = null
 
-const filteredCars = computed(() => {
-  return cars.value.filter((car) => {
-    const matchesSearch =
-      !search.value ||
-      `${car.name} ${car.category} ${car.brand}`.toLowerCase().includes(search.value.toLowerCase())
+const carCards = computed(() => cars.value.map((car) => mapCarCatalogItemToCardModel(car)))
 
-    const matchesBrand = !filters.brand || car.brand === filters.brand
+function snapshotDraftFilters(): FilterDraftState {
+  return {
+    brand: draftFilters.brand,
+    purpose: draftFilters.purpose,
+    fuelType: draftFilters.fuelType,
+    bodyType: draftFilters.bodyType,
+    seatsCount: draftFilters.seatsCount,
+    priceMin: draftFilters.priceMin,
+    priceMax: draftFilters.priceMax,
+    transmission: draftFilters.transmission,
+  }
+}
 
-    const matchesPurposes =
-      !filters.purposes.length || filters.purposes.some((purpose) => car.purposes.includes(purpose))
+function assignDraftFilters(nextFilters: FilterDraftState) {
+  draftFilters.brand = nextFilters.brand
+  draftFilters.purpose = nextFilters.purpose
+  draftFilters.fuelType = nextFilters.fuelType
+  draftFilters.bodyType = nextFilters.bodyType
+  draftFilters.seatsCount = nextFilters.seatsCount
+  draftFilters.priceMin = nextFilters.priceMin
+  draftFilters.priceMax = nextFilters.priceMax
+  draftFilters.transmission = nextFilters.transmission
+}
 
-    const matchesFuel = !filters.fuelTypes.length || filters.fuelTypes.includes(car.fuelType)
+function toSentenceCase(value: string) {
+  if (!value) {
+    return ''
+  }
 
-    const matchesBodyType = !filters.bodyType || car.bodyType === filters.bodyType
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
 
-    const matchesSeats =
-      filters.seats === null || (filters.seats === 7 ? car.seats >= 7 : car.seats === filters.seats)
+function toFilterOption(value: string): FilterOption {
+  return {
+    value,
+    label: toSentenceCase(value),
+  }
+}
 
-    const matchesPriceFrom =
-      filters.priceFrom === null || filters.priceFrom === '' || car.pricePerDay >= filters.priceFrom
+function buildUniqueFilterOptions(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right, 'ru'))
+    .map((value) => toFilterOption(value))
+}
 
-    const matchesPriceTo =
-      filters.priceTo === null || filters.priceTo === '' || car.pricePerDay <= filters.priceTo
+function buildCatalogQuery(filters: FilterDraftState, searchQuery: string): CarsCatalogQuery {
+  return {
+    q: searchQuery.trim() || undefined,
+    brand: filters.brand || undefined,
+    fuel_type: filters.fuelType || undefined,
+    transmission: filters.transmission || undefined,
+    body_type: filters.bodyType || undefined,
+    seats_count: filters.seatsCount ?? undefined,
+    price_min: filters.priceMin ?? undefined,
+    price_max: filters.priceMax ?? undefined,
+    purpose: filters.purpose || undefined,
+    limit: 100,
+    offset: 0,
+  }
+}
 
-    const matchesTransmission =
-      !filters.transmissions.length || filters.transmissions.includes(car.transmission)
+async function loadFilterOptions() {
+  try {
+    const response = await getCarsCatalog({
+      limit: 100,
+      offset: 0,
+    })
 
-    return (
-      matchesSearch &&
-      matchesBrand &&
-      matchesPurposes &&
-      matchesFuel &&
-      matchesBodyType &&
-      matchesSeats &&
-      matchesPriceFrom &&
-      matchesPriceTo &&
-      matchesTransmission
-    )
-  })
-})
+    const items = response.items
+    brandOptions.value = buildUniqueFilterOptions(items.map((item) => item.brand))
+    purposeOptions.value = buildUniqueFilterOptions(items.map((item) => item.purpose))
+    fuelTypeOptions.value = buildUniqueFilterOptions(items.map((item) => item.fuel_type))
+    bodyTypeOptions.value = buildUniqueFilterOptions(items.map((item) => item.body_type))
+    transmissionOptions.value = buildUniqueFilterOptions(items.map((item) => item.transmission))
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === 'AbortError')) {
+      console.error('Failed to load filter options', error)
+    }
+  }
+}
 
-function formatPrice(price) {
-  return new Intl.NumberFormat('ru-RU').format(price) + ' ₽'
+async function loadCatalog(query: CarsCatalogQuery) {
+  currentController?.abort()
+  currentController = new AbortController()
+  isLoading.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await getCarsCatalog(query, currentController.signal)
+    cars.value = response.items
+    pagination.value = response.pagination
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
+
+    cars.value = []
+    pagination.value = defaultPagination
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Не удалось загрузить каталог автомобилей.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function applyFilters() {
+  appliedFilters.value = snapshotDraftFilters()
+  const query = buildCatalogQuery(appliedFilters.value, search.value)
+  activeQuery.value = query
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  void loadCatalog(query)
+}
+
+function reloadCatalog() {
+  void loadCatalog(activeQuery.value)
 }
 
 function resetFilters() {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+    searchTimer = null
+  }
+
   search.value = ''
-  filters.brand = ''
-  filters.purposes = []
-  filters.fuelTypes = []
-  filters.bodyType = ''
-  filters.seats = null
-  filters.priceFrom = null
-  filters.priceTo = null
-  filters.transmissions = []
+  const emptyFilters = createDefaultDraftFilters()
+  assignDraftFilters(emptyFilters)
+  appliedFilters.value = emptyFilters
+  const query = buildCatalogQuery(emptyFilters, '')
+  activeQuery.value = query
+  void loadCatalog(query)
 }
 
-// Здесь можно будет подключить API:
-// onMounted(async () => {
-//   const response = await fetch('/api/cars')
-//   cars.value = await response.json()
-// })
+function toggleSingleValueFilter(
+  key: 'purpose' | 'fuelType' | 'transmission',
+  value: string,
+) {
+  draftFilters[key] = draftFilters[key] === value ? '' : value
+}
+
+watch(search, () => {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+
+  searchTimer = setTimeout(() => {
+    const query = buildCatalogQuery(appliedFilters.value, search.value)
+    activeQuery.value = query
+    void loadCatalog(query)
+  }, 300)
+})
+
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    void favoritesStore.ensureLoaded()
+  }
+
+  void loadFilterOptions()
+  void loadCatalog(activeQuery.value)
+})
+
+onBeforeUnmount(() => {
+  currentController?.abort()
+
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+})
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400');
-
-:global(*) {
-  box-sizing: border-box;
-}
-
-:global(body) {
-  margin: 0;
-  font-family: 'Inter', sans-serif;
-  background: #f4f8fb;
-  color: #18222d;
-}
-
-:global(a) {
-  color: inherit;
-  text-decoration: none;
-}
-
-:global(button),
-:global(input),
-:global(select) {
-  font: inherit;
-}
-
 .catalog-page {
   min-height: 100vh;
   background: linear-gradient(180deg, #f7fbff 0%, #eef4f8 100%);
@@ -400,84 +429,6 @@ function resetFilters() {
   margin: 0 auto;
 }
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  backdrop-filter: blur(18px);
-  background: rgba(255, 255, 255, 0.9);
-  border-bottom: 1px solid rgba(17, 29, 35, 0.08);
-}
-
-.topbar__inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  min-height: 76px;
-}
-
-.brand {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: #11284b;
-}
-
-.topbar__nav {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-}
-
-.topbar__link {
-  position: relative;
-  color: #617080;
-  font-weight: 500;
-  transition: color 0.2s ease;
-}
-
-.topbar__link:hover,
-.topbar__link--active {
-  color: #163f77;
-}
-
-.topbar__link--active::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -10px;
-  height: 2px;
-  border-radius: 999px;
-  background: #163f77;
-}
-
-.topbar__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 280px;
-  padding: 0 14px;
-  height: 46px;
-  background: #eef3f7;
-  border: 1px solid transparent;
-  border-radius: 14px;
-}
-
-.search-box input {
-  width: 100%;
-  border: 0;
-  outline: none;
-  background: transparent;
-}
-
 .catalog-layout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -485,8 +436,7 @@ function resetFilters() {
   padding: 32px 0 48px;
 }
 
-.filters-card,
-.car-card {
+.filters-card {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(17, 29, 35, 0.08);
   box-shadow: 0 16px 40px rgba(14, 40, 64, 0.06);
@@ -509,10 +459,7 @@ function resetFilters() {
 }
 
 .filters-card__header h2,
-.catalog-content__header h1,
-.car-card__top h3,
-.empty-state h3,
-.site-footer h4 {
+.catalog-content__header h1 {
   margin: 0;
 }
 
@@ -606,8 +553,7 @@ function resetFilters() {
 }
 
 .primary-button,
-.secondary-button,
-.icon-button {
+.state-button {
   border: 0;
   cursor: pointer;
   transition: 0.2s ease;
@@ -624,9 +570,7 @@ function resetFilters() {
 }
 
 .primary-button:hover,
-.secondary-button:hover,
-.icon-button:hover,
-.favorite-button:hover {
+.state-button:hover {
   transform: translateY(-1px);
 }
 
@@ -642,228 +586,41 @@ function resetFilters() {
   margin-bottom: 24px;
 }
 
-.catalog-content__header p,
-.car-card__top p,
-.footer-text,
-.empty-state p {
-  margin: 8px 0 0;
-  color: #617080;
-}
-
 .catalog-count {
   color: #617080;
   font-size: 14px;
 }
 
-.cars-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-}
-
-.car-card {
-  overflow: hidden;
-  border-radius: 24px;
-}
-
-.car-card__image-wrap {
-  position: relative;
-  height: 250px;
-  overflow: hidden;
-}
-
-.car-card__image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.35s ease;
-}
-
-.car-card:hover .car-card__image {
-  transform: scale(1.04);
-}
-
-.favorite-button,
-.icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #163f77;
-}
-
-.favorite-button {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-}
-
-.icon-button--primary {
-  background: #163f77;
-  color: #fff;
-}
-
-.car-card__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.car-card__badges--stacked {
-  justify-content: flex-end;
-  max-width: 220px;
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  padding: 0 14px;
-  border-radius: 9999px;
-  border: 1px solid rgba(22, 63, 119, 0.08);
-  background: linear-gradient(135deg, #245ca2 0%, #163f77 100%);
-  box-shadow: 0 10px 24px rgba(22, 63, 119, 0.16);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-  overflow: hidden;
-}
-
-.badge--premium {
-  background: linear-gradient(135deg, #2f74c4 0%, #194987 100%);
-}
-
-.car-card__body {
-  padding: 20px;
-}
-
-.car-card__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.car-card__meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.car-card__price {
-  text-align: right;
-}
-
-.car-card__price strong {
-  display: block;
-  font-size: 22px;
-  color: #11284b;
-}
-
-.car-card__price span {
-  font-size: 12px;
-  color: #617080;
-}
-
-.car-card__specs {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin: 18px 0;
-  padding: 14px 0;
-  border-top: 1px solid #ebf0f4;
-  border-bottom: 1px solid #ebf0f4;
-}
-
-.spec-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #526170;
-  font-size: 14px;
-}
-
-.secondary-button {
-  width: 100%;
-  height: 48px;
-  border-radius: 14px;
-  background: #edf3f7;
-  color: #163f77;
-  font-weight: 700;
-}
-
-.empty-state {
-  margin-top: 24px;
+.catalog-state {
   padding: 32px;
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(17, 29, 35, 0.08);
+  box-shadow: 0 16px 40px rgba(14, 40, 64, 0.06);
   text-align: center;
 }
 
-.site-footer {
-  margin-top: 56px;
-  background: #fff;
-  border-top: 1px solid rgba(17, 29, 35, 0.08);
+.catalog-state--error {
+  border-color: rgba(186, 26, 26, 0.16);
 }
 
-.footer-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.2fr;
-  gap: 24px;
-  padding: 40px 0;
-}
-
-.brand--footer {
-  margin-bottom: 12px;
-}
-
-.site-footer ul {
+.catalog-state h3 {
   margin: 0;
-  padding: 0;
-  list-style: none;
 }
 
-.site-footer li + li {
-  margin-top: 10px;
-}
-
-.site-footer a {
+.catalog-state p {
+  margin: 10px 0 0;
   color: #617080;
 }
 
-.subscribe-box {
-  display: flex;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.footer-bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 20px 0 28px;
-  border-top: 1px solid #edf2f6;
-  color: #7d8894;
-  font-size: 13px;
-}
-
-.footer-icons {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.state-button {
+  min-height: 46px;
+  margin-top: 18px;
+  padding: 0 18px;
+  border-radius: 14px;
+  background: #163f77;
+  color: #fff;
+  font-weight: 700;
 }
 
 @media (max-width: 1100px) {
@@ -874,53 +631,16 @@ function resetFilters() {
   .filters-card {
     position: static;
   }
-
-  .cars-grid,
-  .footer-grid {
-    grid-template-columns: 1fr 1fr;
-  }
 }
 
 @media (max-width: 768px) {
-  .topbar__inner,
-  .catalog-content__header,
-  .footer-bottom {
+  .catalog-content__header {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .topbar__nav {
-    order: 3;
-    justify-content: space-between;
-  }
-
-  .topbar__actions,
-  .search-box {
-    width: 100%;
-  }
-
-  .search-box {
-    min-width: 0;
-  }
-
-  .cars-grid,
-  .footer-grid,
   .price-grid {
     grid-template-columns: 1fr;
-  }
-
-  .car-card__top,
-  .car-card__specs {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .car-card__meta,
-  .car-card__price,
-  .car-card__badges--stacked {
-    align-items: flex-start;
-    text-align: left;
-    justify-content: flex-start;
   }
 }
 </style>

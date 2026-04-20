@@ -10,25 +10,29 @@ export class ApiError extends Error {
   }
 }
 
-type HttpMethod = 'GET' | 'POST' | 'PUT'
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE'
 
-interface RequestOptions<TBody> {
+export interface ApiRequestOptions<TBody> {
   method?: HttpMethod
   body?: TBody
   accessToken?: string
   signal?: AbortSignal
+  baseUrl?: string
 }
 
-interface ErrorPayload {
-  error?: string
-  code?: string
+const fallbackUserApiBaseUrl = '/api/v1/users'
+const fallbackGatewayApiBaseUrl = '/api/v1'
+
+function normalizeBaseUrl(baseUrl: string) {
+  return baseUrl.replace(/\/$/, '')
 }
 
-const fallbackBaseUrl = '/api/v1/users'
+export const USER_SERVICE_API_BASE_URL = normalizeBaseUrl(
+  import.meta.env.VITE_API_BASE_URL || fallbackUserApiBaseUrl,
+)
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || fallbackBaseUrl).replace(
-  /\/$/,
-  '',
+export const API_GATEWAY_BASE_URL = normalizeBaseUrl(
+  import.meta.env.VITE_GATEWAY_API_BASE_URL || fallbackGatewayApiBaseUrl,
 )
 
 function buildHeaders(accessToken?: string): HeadersInit {
@@ -55,14 +59,62 @@ async function parseResponse(response: Response): Promise<unknown> {
   }
 
   const text = await response.text()
-  return text ? { error: text } : null
+  return text ? text : null
+}
+
+function normalizeErrorPayload(data: unknown): { message: string; code?: string } {
+  if (typeof data === 'string' && data.trim()) {
+    return { message: data }
+  }
+
+  if (data && typeof data === 'object') {
+    const payload = data as Record<string, unknown>
+    const topLevelCode = typeof payload.code === 'string' ? payload.code : undefined
+
+    if (typeof payload.error === 'string' && payload.error.trim()) {
+      return {
+        message: payload.error,
+        code: topLevelCode,
+      }
+    }
+
+    if (payload.error && typeof payload.error === 'object') {
+      const nestedError = payload.error as Record<string, unknown>
+      const nestedMessage =
+        typeof nestedError.message === 'string' && nestedError.message.trim()
+          ? nestedError.message
+          : undefined
+      const nestedCode =
+        typeof nestedError.code === 'string' ? nestedError.code : topLevelCode
+
+      if (nestedMessage) {
+        return {
+          message: nestedMessage,
+          code: nestedCode,
+        }
+      }
+    }
+
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return {
+        message: payload.message,
+        code: topLevelCode,
+      }
+    }
+  }
+
+  return {
+    message: 'Не удалось выполнить запрос.',
+  }
 }
 
 export async function apiRequest<TResponse, TBody = unknown>(
   path: string,
-  options: RequestOptions<TBody> = {},
+  options: ApiRequestOptions<TBody> = {},
 ): Promise<TResponse> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const baseUrl = options.baseUrl || USER_SERVICE_API_BASE_URL
+
+  const response = await fetch(`${baseUrl}${path}`, {
     method: options.method || 'GET',
     headers: {
       ...buildHeaders(options.accessToken),
@@ -75,12 +127,8 @@ export async function apiRequest<TResponse, TBody = unknown>(
   const data = await parseResponse(response)
 
   if (!response.ok) {
-    const payload = (data || {}) as ErrorPayload
-    throw new ApiError(
-      payload.error || 'Не удалось выполнить запрос.',
-      response.status,
-      payload.code,
-    )
+    const payload = normalizeErrorPayload(data)
+    throw new ApiError(payload.message, response.status, payload.code)
   }
 
   return data as TResponse

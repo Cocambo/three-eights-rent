@@ -3,13 +3,29 @@
     <AppHeader />
 
     <main class="favorites-page__main">
-      <section class="favorites-card">
-        <span class="favorites-card__eyebrow">Избранное</span>
-        <h1 class="favorites-card__title">Список избранных автомобилей появится здесь</h1>
+      <section class="favorites-section">
+    
+        <div v-if="favoritesStore.isLoading" class="favorites-state">
+          <h2>Загружаем избранное</h2>
+          <p>Получаем сохраненные автомобили из car-service.</p>
+        </div>
 
-        <RouterLink class="favorites-card__button" :to="{ name: 'cars' }">
-          Перейти к автомобилям
-        </RouterLink>
+        <div v-else-if="favoritesStore.errorMessage" class="favorites-state favorites-state--error">
+          <h2>Не удалось загрузить избранное</h2>
+          <p>{{ favoritesStore.errorMessage }}</p>
+          <button class="favorites-card__button" type="button" @click="loadFavorites">Повторить</button>
+        </div>
+
+        <div v-else-if="!favoritesStore.favoriteCards.length" class="favorites-state">
+          <h2>Список избранного пока пуст</h2>
+          <p>Перейдите в каталог и добавьте автомобили, которые хотите сохранить.</p>
+
+          <RouterLink class="favorites-card__button" :to="{ name: 'cars' }">
+            Перейти в каталог
+          </RouterLink>
+        </div>
+
+        <CarCatalogList v-else :cars="favoritesStore.favoriteCards" />
       </section>
     </main>
 
@@ -18,10 +34,37 @@
 </template>
 
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { onMounted } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import CarCatalogList from '@/components/CarCatalogList.vue'
+import { ApiError } from '@/stores/auth'
+import { useFavoritesStore } from '@/stores/favorites'
+
+const favoritesStore = useFavoritesStore()
+const router = useRouter()
+const route = useRoute()
+
+async function loadFavorites() {
+  try {
+    await favoritesStore.loadFavorites({ force: true })
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      await router.push({
+        name: 'login',
+        query: {
+          redirect: route.fullPath,
+        },
+      })
+    }
+  }
+}
+
+onMounted(() => {
+  void loadFavorites()
+})
 </script>
 
 <style scoped>
@@ -33,24 +76,26 @@ import AppHeader from '@/components/AppHeader.vue'
 }
 
 .favorites-page__main {
-  min-height: calc(100vh - 72px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 16px;
+  padding: 32px 16px 56px;
 }
 
-.favorites-card {
+.favorites-section {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+}
+
+.favorites-section__header,
+.favorites-state {
   width: 100%;
-  max-width: 720px;
-  padding: 40px;
+  padding: 32px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 24px 48px rgba(0, 25, 68, 0.08);
-  text-align: center;
 }
 
-.favorites-card__eyebrow {
+.favorites-section__eyebrow {
   display: inline-block;
   margin-bottom: 16px;
   color: #0058ca;
@@ -60,20 +105,33 @@ import AppHeader from '@/components/AppHeader.vue'
   text-transform: uppercase;
 }
 
-.favorites-card__title {
-  margin: 0 0 16px;
+.favorites-section__title,
+.favorites-state h2 {
+  margin: 0;
   color: #001944;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 2.5rem;
+}
+
+.favorites-section__title {
+  font-size: clamp(2rem, 3vw, 3rem);
   line-height: 1.05;
 }
 
-.favorites-card__text {
-  margin: 0 auto;
-  max-width: 520px;
+.favorites-section__text,
+.favorites-state p {
+  margin: 14px 0 0;
+  max-width: 620px;
   color: #55606f;
   font-size: 1rem;
   line-height: 1.7;
+}
+
+.favorites-state {
+  text-align: center;
+}
+
+.favorites-state--error {
+  border: 1px solid rgba(186, 26, 26, 0.12);
 }
 
 .favorites-card__button {
@@ -83,21 +141,24 @@ import AppHeader from '@/components/AppHeader.vue'
   min-height: 48px;
   margin-top: 28px;
   padding: 0 20px;
+  border: none;
   border-radius: 12px;
   background: #001944;
   color: #ffffff;
   font-size: 0.95rem;
   font-weight: 700;
   text-decoration: none;
+  cursor: pointer;
 }
 
 @media (max-width: 640px) {
-  .favorites-card {
-    padding: 32px 24px;
+  .favorites-page__main {
+    padding: 24px 12px 40px;
   }
 
-  .favorites-card__title {
-    font-size: 2rem;
+  .favorites-section__header,
+  .favorites-state {
+    padding: 24px;
   }
 }
 </style>

@@ -1,7 +1,7 @@
-﻿import { computed, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import { ApiError, apiRequest } from '@/services/api'
+import { ApiError, apiRequest, type ApiRequestOptions } from '@/services/api'
 
 export interface AuthUser {
   id: number
@@ -164,11 +164,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function authorizedRequest<TResponse, TBody = unknown>(
     path: string,
-    options: {
-      method?: 'GET' | 'POST' | 'PUT'
-      body?: TBody
-      signal?: AbortSignal
-    } = {},
+    options: Omit<ApiRequestOptions<TBody>, 'accessToken'> = {},
   ): Promise<TResponse> {
     if (!tokens.value?.access_token) {
       throw new ApiError('Authentication is required.', 401, 'MISSING_TOKEN')
@@ -434,6 +430,6 @@ export const useAuthStore = defineStore('auth', () => {
     updateProfile,
     saveDriverLicense,
     clearSession,
+    authorizedRequest,
   }
 })
-
