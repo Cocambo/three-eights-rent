@@ -92,3 +92,37 @@ func toListFavoritesResponse(items []service.FavoriteItem) dto.ListFavoritesResp
 		Items: responseItems,
 	}
 }
+
+func toBookingResponse(item service.BookingRecord) dto.BookingResponse {
+	return dto.BookingResponse{
+		ID:          item.ID,
+		CarID:       item.CarID,
+		StartDate:   item.StartDate,
+		EndDate:     item.EndDate,
+		Status:      item.Status,
+		CreatedAt:   item.CreatedAt,
+		UpdatedAt:   item.UpdatedAt,
+		CancelledAt: item.CancelledAt,
+	}
+}
+
+func toListBookingsResponse(items []service.BookingHistoryItem) dto.ListBookingsResponse {
+	responseItems := make([]dto.BookingHistoryItemResponse, 0, len(items))
+	for _, item := range items {
+		responseItems = append(responseItems, dto.BookingHistoryItemResponse{
+			ID:          item.ID,
+			CarID:       item.CarID,
+			StartDate:   item.StartDate,
+			EndDate:     item.EndDate,
+			Status:      item.Status,
+			CreatedAt:   item.CreatedAt,
+			UpdatedAt:   item.UpdatedAt,
+			CancelledAt: item.CancelledAt,
+			Car:         toCarCatalogItemResponse(item.Car),
+		})
+	}
+
+	return dto.ListBookingsResponse{
+		Items: responseItems,
+	}
+}

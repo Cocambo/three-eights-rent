@@ -54,10 +54,13 @@ func run() error {
 
 	imageStorage := storage.NewMinIOImageStorageService(minioClient, minioPublicClient, cfg.MinIO)
 	carRepository := repository.NewCarRepository(db)
+	bookingRepository := repository.NewBookingRepository(db)
 	favoriteRepository := repository.NewFavoriteRepository(db)
 	carService := service.NewCarService(carRepository, imageStorage)
+	bookingService := service.NewBookingService(bookingRepository, carRepository, imageStorage)
 	favoriteService := service.NewFavoriteService(favoriteRepository, carRepository, imageStorage)
 	carHandler := handler.NewCarHandler(carService)
+	bookingHandler := handler.NewBookingHandler(bookingService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
 	jwtMiddleware := middleware.NewJWTMiddleware(cfg.JWT.AccessSecret)
 
@@ -65,6 +68,7 @@ func run() error {
 	middleware.Setup(router)
 	handler.RegisterRoutes(router, handler.Dependencies{
 		CarHandler:      carHandler,
+		BookingHandler:  bookingHandler,
 		FavoriteHandler: favoriteHandler,
 		JWTMiddleware:   jwtMiddleware,
 		MinIOAvailable:  imageStorage != nil,

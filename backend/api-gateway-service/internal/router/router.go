@@ -24,6 +24,7 @@ func Register(engine *gin.Engine, cfg *config.Config) {
 	userProxy := proxy.NewReverseProxy(userServiceURL, "/api/v1/users", "/api/v1")
 	carProxy := proxy.NewReverseProxy(carServiceURL, "/api/v1/cars", "/api/v1/cars")
 	favoritesProxy := proxy.NewReverseProxy(carServiceURL, "/api/v1/favorites", "/api/v1/favorites")
+	bookingsProxy := proxy.NewReverseProxy(carServiceURL, "/api/v1/bookings", "/api/v1/bookings")
 	jwtMiddleware := middleware.JWTMiddleware(cfg.JWTAccessSecret)
 	stripIdentityHeaders := middleware.StripIdentityHeaders()
 
@@ -65,5 +66,13 @@ func Register(engine *gin.Engine, cfg *config.Config) {
 		protectedFavorites.GET("", favoritesProxy)
 		protectedFavorites.POST("/:carId", favoritesProxy)
 		protectedFavorites.DELETE("/:carId", favoritesProxy)
+	}
+
+	protectedBookings := engine.Group("/api/v1/bookings")
+	protectedBookings.Use(stripIdentityHeaders, jwtMiddleware)
+	{
+		protectedBookings.POST("", bookingsProxy)
+		protectedBookings.DELETE("/:id", bookingsProxy)
+		protectedBookings.GET("", bookingsProxy)
 	}
 }
