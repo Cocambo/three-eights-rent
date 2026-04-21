@@ -28,15 +28,28 @@ type BookingRecord struct {
 	CancelledAt *time.Time
 }
 
+type BookingInterval struct {
+	StartDate time.Time
+	EndDate   time.Time
+}
+
 type BookingHistoryItem struct {
 	BookingRecord
 	Car CatalogCar
+}
+
+type CarAvailabilityResult struct {
+	CarID         uint
+	From          time.Time
+	To            time.Time
+	BusyIntervals []BookingInterval
 }
 
 type BookingService interface {
 	CreateBooking(ctx context.Context, command CreateBookingCommand) (BookingRecord, error)
 	CancelBooking(ctx context.Context, userID, bookingID uint) (BookingRecord, error)
 	GetUserBookings(ctx context.Context, userID uint) ([]BookingHistoryItem, error)
+	GetCarAvailability(ctx context.Context, carID uint, fromDate, toDate string) (CarAvailabilityResult, error)
 }
 
 type bookingService struct {
@@ -147,6 +160,60 @@ func (s *bookingService) GetUserBookings(
 	return items, nil
 }
 
+func (s *bookingService) GetCarAvailability(
+	ctx context.Context,
+	carID uint,
+	fromDate, toDate string,
+) (CarAvailabilityResult, error) {
+	if carID == 0 {
+		return CarAvailabilityResult{}, validationError("car_id must be greater than zero")
+	}
+
+	startDate, err := parseDateOnly(fromDate, "from")
+	if err != nil {
+		return CarAvailabilityResult{}, err
+	}
+
+	endDate, err := parseDateOnly(toDate, "to")
+	if err != nil {
+		return CarAvailabilityResult{}, err
+	}
+
+	if !startDate.Before(endDate) {
+		return CarAvailabilityResult{}, validationError("from must be earlier than to")
+	}
+
+	exists, err := s.carRepository.ExistsByID(ctx, carID)
+	if err != nil {
+		return CarAvailabilityResult{}, err
+	}
+
+	if !exists {
+		return CarAvailabilityResult{}, apperrors.New(apperrors.ErrNotFound, "car not found")
+	}
+
+	intervals, err := s.bookingRepository.ListActiveIntervalsByCarID(ctx, carID, startDate, endDate)
+	if err != nil {
+		return CarAvailabilityResult{}, err
+	}
+
+	result := CarAvailabilityResult{
+		CarID:         carID,
+		From:          startDate,
+		To:            endDate,
+		BusyIntervals: make([]BookingInterval, 0, len(intervals)),
+	}
+
+	for _, interval := range intervals {
+		result.BusyIntervals = append(result.BusyIntervals, BookingInterval{
+			StartDate: interval.StartDate,
+			EndDate:   interval.EndDate,
+		})
+	}
+
+	return result, nil
+}
+
 func normalizeBookingDates(startDate, endDate time.Time) (time.Time, time.Time, error) {
 	if startDate.IsZero() {
 		return time.Time{}, time.Time{}, validationError("start_date is required")
@@ -163,6 +230,19 @@ func normalizeBookingDates(startDate, endDate time.Time) (time.Time, time.Time, 
 	}
 
 	return startDate, endDate, nil
+}
+
+func parseDateOnly(value, field string) (time.Time, error) {
+	if value == "" {
+		return time.Time{}, validationError(field + " is required")
+	}
+
+	parsed, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return time.Time{}, validationError(field + " must be in YYYY-MM-DD format")
+	}
+
+	return parsed.UTC(), nil
 }
 
 func toBookingRecord(booking domains.Booking) BookingRecord {

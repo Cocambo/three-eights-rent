@@ -36,6 +36,7 @@ func RegisterRoutes(router *gin.Engine, deps Dependencies) {
 	{
 		public.GET("/cars", deps.CarHandler.List)
 		public.GET("/cars/:id", deps.CarHandler.GetByID)
+		public.GET("/cars/:id/availability", deps.BookingHandler.GetAvailability)
 		public.POST("/cars/:id/images", deps.CarHandler.UploadImage)
 	}
 

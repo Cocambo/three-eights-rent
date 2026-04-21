@@ -1,4 +1,4 @@
-import { API_GATEWAY_BASE_URL, ApiError, type ApiRequestOptions } from '@/services/api'
+import { API_GATEWAY_BASE_URL, ApiError, apiRequest, type ApiRequestOptions } from '@/services/api'
 import type { CarCatalogItem } from '@/services/cars'
 
 export interface BookingRecord {
@@ -37,6 +37,18 @@ interface CreateBookingPayload {
   end_date: string
 }
 
+export interface BookingBusyInterval {
+  start_date: string
+  end_date: string
+}
+
+export interface CarAvailabilityResponse {
+  car_id: number
+  from: string
+  to: string
+  busy_intervals: BookingBusyInterval[]
+}
+
 export function createBooking(
   request: AuthorizedRequest,
   payload: CreateBookingPayload,
@@ -52,6 +64,22 @@ export function createBooking(
 
 export function getBookings(request: AuthorizedRequest, signal?: AbortSignal) {
   return request<BookingsResponse>('/bookings', {
+    signal,
+    baseUrl: API_GATEWAY_BASE_URL,
+  })
+}
+
+export function getCarAvailability(
+  carId: number,
+  params: { from: string; to: string },
+  signal?: AbortSignal,
+) {
+  const search = new URLSearchParams({
+    from: params.from,
+    to: params.to,
+  })
+
+  return apiRequest<CarAvailabilityResponse>(`/cars/${carId}/availability?${search.toString()}`, {
     signal,
     baseUrl: API_GATEWAY_BASE_URL,
   })

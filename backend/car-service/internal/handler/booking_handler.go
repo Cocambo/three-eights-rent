@@ -44,6 +44,31 @@ func (h *BookingHandler) Create(c *gin.Context) {
 	writeSuccess(c, http.StatusCreated, toBookingResponse(booking))
 }
 
+func (h *BookingHandler) GetAvailability(c *gin.Context) {
+	var uri dto.GetCarByIDURI
+	if !bindURI(c, &uri) {
+		return
+	}
+
+	var req dto.GetCarAvailabilityQuery
+	if !bindQuery(c, &req) {
+		return
+	}
+
+	availability, err := h.bookingService.GetCarAvailability(
+		c.Request.Context(),
+		uri.ID,
+		req.From,
+		req.To,
+	)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+
+	writeSuccess(c, http.StatusOK, toCarAvailabilityResponse(availability))
+}
+
 func (h *BookingHandler) Cancel(c *gin.Context) {
 	userID, ok := middleware.UserIDFromGin(c)
 	if !ok {

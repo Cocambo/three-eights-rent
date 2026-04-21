@@ -3,6 +3,7 @@ package handler
 import (
 	"car-service/internal/dto"
 	"car-service/internal/service"
+	"time"
 )
 
 func toCarsCatalogResponse(result service.CatalogResult) dto.CarsCatalogResponse {
@@ -62,6 +63,23 @@ func toCarDetailsResponse(result service.CarDetailsResult) dto.CarDetailsRespons
 		Purpose:      result.Purpose,
 		Description:  result.Description,
 		Images:       images,
+	}
+}
+
+func toCarAvailabilityResponse(result service.CarAvailabilityResult) dto.CarAvailabilityResponse {
+	intervals := make([]dto.CarAvailabilityIntervalResponse, 0, len(result.BusyIntervals))
+	for _, interval := range result.BusyIntervals {
+		intervals = append(intervals, dto.CarAvailabilityIntervalResponse{
+			StartDate: formatDateOnly(interval.StartDate),
+			EndDate:   formatDateOnly(interval.EndDate),
+		})
+	}
+
+	return dto.CarAvailabilityResponse{
+		CarID:         result.CarID,
+		From:          formatDateOnly(result.From),
+		To:            formatDateOnly(result.To),
+		BusyIntervals: intervals,
 	}
 }
 
@@ -125,4 +143,8 @@ func toListBookingsResponse(items []service.BookingHistoryItem) dto.ListBookings
 	return dto.ListBookingsResponse{
 		Items: responseItems,
 	}
+}
+
+func formatDateOnly(value time.Time) string {
+	return value.UTC().Format("2006-01-02")
 }

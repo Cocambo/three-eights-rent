@@ -19,10 +19,16 @@ type CreateBookingParams struct {
 	EndDate   time.Time
 }
 
+type BookingInterval struct {
+	StartDate time.Time `gorm:"column:start_date"`
+	EndDate   time.Time `gorm:"column:end_date"`
+}
+
 type BookingRepository interface {
 	Create(ctx context.Context, params CreateBookingParams) (domains.Booking, error)
 	CancelByIDAndUser(ctx context.Context, bookingID, userID uint) (domains.Booking, error)
 	ListByUserID(ctx context.Context, userID uint) ([]domains.Booking, error)
+	ListActiveIntervalsByCarID(ctx context.Context, carID uint, fromDate, toDate time.Time) ([]BookingInterval, error)
 }
 
 type gormBookingRepository struct {
@@ -132,6 +138,33 @@ func (r *gormBookingRepository) ListByUserID(ctx context.Context, userID uint) (
 	}
 
 	return bookings, nil
+}
+
+func (r *gormBookingRepository) ListActiveIntervalsByCarID(
+	ctx context.Context,
+	carID uint,
+	fromDate, toDate time.Time,
+) ([]BookingInterval, error) {
+	var intervals []BookingInterval
+
+	err := r.db.WithContext(ctx).
+		Model(&domains.Booking{}).
+		Select("start_date", "end_date").
+		Where(
+			"car_id = ? AND status = ? AND start_date < ? AND end_date > ?",
+			carID,
+			domains.BookingStatusActive,
+			toDate,
+			fromDate,
+		).
+		Order("start_date ASC").
+		Order("end_date ASC").
+		Find(&intervals).Error
+	if err != nil {
+		return nil, mapBookingRepositoryError(err)
+	}
+
+	return intervals, nil
 }
 
 func hasActiveOverlap(tx *gorm.DB, carID uint, startDate, endDate time.Time) (bool, error) {

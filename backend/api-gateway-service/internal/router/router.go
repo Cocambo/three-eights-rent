@@ -48,6 +48,7 @@ func Register(engine *gin.Engine, cfg *config.Config) {
 	{
 		publicCars.GET("", carProxy)
 		publicCars.GET("/:id", carProxy)
+		publicCars.GET("/:id/availability", carProxy)
 		publicCars.POST("/:id/images", carProxy)
 	}
 
