@@ -432,6 +432,7 @@ onBeforeUnmount(() => {
 .catalog-layout {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
+  align-items: start;
   gap: 32px;
   padding: 32px 0 48px;
 }
@@ -446,8 +447,12 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 100px;
   align-self: start;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 120px);
   padding: 24px;
   border-radius: 24px;
+  overflow: hidden;
 }
 
 .filters-card__header {
@@ -456,6 +461,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .filters-card__header h2,
@@ -475,7 +481,12 @@ onBeforeUnmount(() => {
 .filters-list {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
 }
 
 .filter-group {
@@ -562,11 +573,15 @@ onBeforeUnmount(() => {
 .primary-button {
   width: 100%;
   margin-top: 24px;
-  height: 52px;
+  min-height: 52px;
   border-radius: 16px;
   background: #163f77;
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
 .primary-button:hover,
@@ -630,6 +645,7 @@ onBeforeUnmount(() => {
 
   .filters-card {
     position: static;
+    max-height: none;
   }
 }
 
