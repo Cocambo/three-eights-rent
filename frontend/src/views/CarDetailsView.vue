@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="car-page">
     <AppHeader />
 
@@ -83,7 +83,9 @@
               <div class="hero-copy__header">
                 <div>
                   <h1>{{ carTitle }}</h1>
-                  <p class="hero-copy__text">{{ car.description || 'Описание для этого автомобиля пока не добавлено.' }}</p>
+                  <p class="hero-copy__text">
+                    {{ car.description || 'Описание для этого автомобиля пока не добавлено.' }}
+                  </p>
                 </div>
 
                 <button
@@ -169,50 +171,187 @@
               </div>
             </div>
 
-            <div class="booking-card__fields">
-              <label class="booking-field">
-                <span>Дата начала</span>
-                <input v-model="bookingForm.startDate" :min="today" type="date" />
-              </label>
-
-              <label class="booking-field">
-                <span>Дата завершения</span>
-                <input v-model="bookingForm.endDate" :min="bookingForm.startDate || today" type="date" />
-              </label>
-            </div>
-
             <div class="booking-summary" :class="bookingState.toneClass">
-              <template v-if="bookingState.ready">
-                <p class="booking-summary__title">{{ bookingState.title }}</p>
-                <p class="booking-summary__text">{{ bookingState.description }}</p>
-                <div class="booking-summary__price">
-                  <span>{{ bookingState.days }} суток</span>
-                  <strong>{{ formatPrice(bookingState.totalPrice) }}</strong>
-                </div>
-              </template>
-              <template v-else>
-                <p class="booking-summary__title">{{ bookingState.title }}</p>
-                <p class="booking-summary__text">{{ bookingState.description }}</p>
-              </template>
+              <p class="booking-summary__title">{{ bookingState.title }}</p>
+              <p class="booking-summary__text">{{ bookingState.description }}</p>
+              <div v-if="bookingState.ready" class="booking-summary__price">
+                <span>{{ bookingState.days }} суток</span>
+                <strong>{{ formatPrice(bookingState.totalPrice) }}</strong>
+              </div>
             </div>
 
-            <button
-              class="booking-button"
-              type="button"
-              :disabled="!bookingState.ready"
-              @click="submitBooking"
-            >
-              Забронировать
-            </button>
+            <template v-if="authStore.isAuthenticated">
+              <div class="booking-card__fields">
+                <div class="booking-field booking-field--calendar">
+                  <span>Дата начала</span>
+                  <button
+                    class="booking-field__trigger"
+                    :class="{ 'booking-field__trigger--placeholder': !bookingForm.startDate }"
+                    type="button"
+                    :disabled="isAvailabilityLoading"
+                    @click="toggleCalendar('start')"
+                  >
+                    {{ isAvailabilityLoading ? 'Загрузка...' : formatFieldValue(bookingForm.startDate, 'Выбрать') }}
+                  </button>
 
-            <p class="booking-note">
-              <span class="material-symbols-outlined">verified_user</span>
-              Онлайн-бронирование пока работает как интерфейс-заглушка и не отправляет заявку в backend.
-            </p>
+                  <div v-if="openCalendar === 'start'" class="booking-calendar">
+                    <div class="booking-calendar__header">
+                      <button class="booking-calendar__nav" type="button" @click="shiftCalendarMonth(-1)">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                      </button>
+                      <strong>{{ calendarMonthLabel }}</strong>
+                      <button class="booking-calendar__nav" type="button" @click="shiftCalendarMonth(1)">
+                        <span class="material-symbols-outlined">chevron_right</span>
+                      </button>
+                    </div>
 
-            <div v-if="bookingResult" class="booking-result">
-              <h3>Заглушка бронирования</h3>
+                    <div class="booking-calendar__weekdays">
+                      <span v-for="day in weekDays" :key="day">{{ day }}</span>
+                    </div>
+
+                    <div class="booking-calendar__grid">
+                      <button
+                        v-for="cell in calendarCells"
+                        :key="cell.key"
+                        class="booking-calendar__day"
+                        :class="{
+                          'booking-calendar__day--muted': !cell.isCurrentMonth,
+                          'booking-calendar__day--selected': cell.isSelected,
+                        }"
+                        type="button"
+                        :disabled="cell.isDisabled"
+                        @click="selectCalendarDate(cell.date)"
+                      >
+                        {{ cell.label }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="booking-field booking-field--calendar">
+                  <span>Дата завершения</span>
+                  <button
+                    class="booking-field__trigger"
+                    :class="{ 'booking-field__trigger--placeholder': !bookingForm.endDate }"
+                    type="button"
+                    :disabled="isAvailabilityLoading || !bookingForm.startDate"
+                    @click="toggleCalendar('end')"
+                  >
+                    {{ formatFieldValue(bookingForm.endDate, 'Выбрать') }}
+                  </button>
+
+                  <div v-if="openCalendar === 'end'" class="booking-calendar">
+                    <div class="booking-calendar__header">
+                      <button class="booking-calendar__nav" type="button" @click="shiftCalendarMonth(-1)">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                      </button>
+                      <strong>{{ calendarMonthLabel }}</strong>
+                      <button class="booking-calendar__nav" type="button" @click="shiftCalendarMonth(1)">
+                        <span class="material-symbols-outlined">chevron_right</span>
+                      </button>
+                    </div>
+
+                    <div class="booking-calendar__weekdays">
+                      <span v-for="day in weekDays" :key="day">{{ day }}</span>
+                    </div>
+
+                    <div class="booking-calendar__grid">
+                      <button
+                        v-for="cell in calendarCells"
+                        :key="cell.key"
+                        class="booking-calendar__day"
+                        :class="{
+                          'booking-calendar__day--muted': !cell.isCurrentMonth,
+                          'booking-calendar__day--selected': cell.isSelected,
+                        }"
+                        type="button"
+                        :disabled="cell.isDisabled"
+                        @click="selectCalendarDate(cell.date)"
+                      >
+                        {{ cell.label }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                class="booking-button"
+                type="button"
+                :disabled="!bookingState.ready || isBookingSubmitting"
+                @click="submitBooking"
+              >
+                {{ isBookingSubmitting ? 'Оформляем...' : 'Забронировать' }}
+              </button>
+            </template>
+
+            <template v-else>
+              <div v-if="false" class="availability-panel">
+                <div class="availability-panel__header">
+                  <p class="availability-panel__title">Занятые даты</p>
+                  <span v-if="busyIntervals.length" class="availability-panel__badge">
+                    {{ busyIntervals.length }}
+                  </span>
+                </div>
+
+                <p v-if="isAvailabilityLoading" class="availability-panel__note">
+                  Обновляем занятые периоды...
+                </p>
+
+                <template v-else-if="availability">
+                  <p class="availability-panel__note">
+                    Показываем занятые интервалы до {{ availabilityWindowEndLabel }}. После входа можно
+                    сразу выбрать свободный диапазон.
+                  </p>
+
+                  <ul v-if="visibleBusyIntervals.length" class="availability-list">
+                    <li
+                      v-for="interval in visibleBusyIntervals"
+                      :key="`guest-${interval.start_date}-${interval.end_date}`"
+                      class="availability-list__item"
+                    >
+                      <span class="material-symbols-outlined">event_busy</span>
+                      <div>
+                        <strong>{{ formatBusyInterval(interval) }}</strong>
+                        <p>{{ getBusyIntervalDays(interval) }} суток</p>
+                      </div>
+                    </li>
+                  </ul>
+
+                  <p v-else class="availability-panel__empty">
+                    В ближайшем окне занятых дат пока нет.
+                  </p>
+                </template>
+
+                <p
+                  v-else-if="availabilityErrorMessage"
+                  class="availability-panel__note availability-panel__note--warning"
+                >
+                  {{ availabilityErrorMessage }}
+                </p>
+              </div>
+
+              <div class="booking-guest">
+                <p class="booking-guest__text">
+                  Войдите, чтобы выбрать даты и оформить бронь.
+                </p>
+                <RouterLink class="booking-login-link" :to="loginLink">
+                  Войти, чтобы забронировать
+                </RouterLink>
+              </div>
+            </template>
+
+            <div v-if="bookingErrorMessage" class="booking-result booking-result--error">
+              <h3>Бронирование не создано</h3>
+              <p>{{ bookingErrorMessage }}</p>
+            </div>
+
+            <div v-if="bookingResult" class="booking-result booking-result--success">
+              <h3>Бронирование оформлено</h3>
               <p>{{ bookingResult }}</p>
+              <RouterLink class="booking-result__link" :to="{ name: 'profile' }">
+                Перейти в историю бронирований
+              </RouterLink>
             </div>
           </aside>
         </div>
@@ -242,6 +381,12 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import {
+  createBooking,
+  getBookingErrorMessage,
+  getCarAvailability,
+} from '@/services/bookings'
+import type { BookingBusyInterval, CarAvailabilityResponse } from '@/services/bookings'
 import type { CarDetailsResponse } from '@/services/cars'
 import { getCarDetails } from '@/services/cars'
 import { ApiError, useAuthStore } from '@/stores/auth'
@@ -253,14 +398,25 @@ const authStore = useAuthStore()
 const favoritesStore = useFavoritesStore()
 
 const car = ref<CarDetailsResponse | null>(null)
+const availability = ref<CarAvailabilityResponse | null>(null)
 const isLoading = ref(false)
+const isAvailabilityLoading = ref(false)
 const errorMessage = ref('')
+const availabilityErrorMessage = ref('')
 const selectedImageIndex = ref(0)
 const thumbnailWindowStart = ref(0)
 const lightboxOpen = ref(false)
 const bookingResult = ref('')
+const bookingErrorMessage = ref('')
+const isBookingSubmitting = ref(false)
+const preserveBookingFeedback = ref(false)
 const visibleThumbCount = 4
+const visibleBusyIntervalsCount = 6
 const today = getToday()
+const availabilityRangeEnd = addDays(today, 365)
+const openCalendar = ref<'start' | 'end' | null>(null)
+const calendarMonth = ref(startOfMonth(today))
+const weekDays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
 const bookingForm = reactive({
   startDate: '',
@@ -294,6 +450,59 @@ const isFavorite = computed(() => (car.value ? favoritesStore.isFavorite(car.val
 const favoriteButtonLabel = computed(() =>
   isFavorite.value ? 'Удалить из избранного' : 'Добавить в избранное',
 )
+const loginLink = computed(() => ({
+  name: 'login' as const,
+  query: {
+    redirect: route.fullPath,
+  },
+}))
+const busyIntervals = computed(() => availability.value?.busy_intervals ?? [])
+const calendarMonthLabel = computed(() => {
+  return new Intl.DateTimeFormat('ru-RU', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(parseDateOnly(calendarMonth.value))
+})
+const calendarCells = computed(() => {
+  if (!openCalendar.value) {
+    return []
+  }
+
+  const monthStartDate = parseDateOnly(calendarMonth.value)
+  const firstDay = monthStartDate.getUTCDay()
+  const offset = firstDay === 0 ? 6 : firstDay - 1
+  const firstCellDate = addDays(calendarMonth.value, -offset)
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = addDays(firstCellDate, index)
+
+    return {
+      key: `${openCalendar.value}-${date}`,
+      date,
+      label: parseDateOnly(date).getUTCDate(),
+      isCurrentMonth: date.slice(0, 7) === calendarMonth.value.slice(0, 7),
+      isDisabled: isCalendarDateDisabled(date),
+      isSelected:
+        (openCalendar.value === 'start' && bookingForm.startDate === date) ||
+        (openCalendar.value === 'end' && bookingForm.endDate === date),
+    }
+  })
+})
+const visibleBusyIntervals = computed(() => busyIntervals.value.slice(0, visibleBusyIntervalsCount))
+const availabilityWindowEndLabel = computed(() => {
+  if (!availability.value) {
+    return ''
+  }
+
+  return formatDate(addDays(availability.value.to, -1))
+})
+const startDateBusyInterval = computed(() =>
+  findIntervalContainingDate(bookingForm.startDate, busyIntervals.value),
+)
+const selectedBusyInterval = computed(() =>
+  findOverlappingInterval(bookingForm.startDate, bookingForm.endDate, busyIntervals.value),
+)
 
 const primaryFeatures = computed(() => {
   if (!car.value) {
@@ -320,6 +529,28 @@ const bookingState = computed(() => {
     }
   }
 
+  if (!authStore.isAuthenticated) {
+    return {
+      ready: false,
+      title: 'Бронирование доступно после входа',
+      description: 'Авторизуйтесь, чтобы выбрать даты, оформить бронь и видеть её историю в профиле.',
+      days: 0,
+      totalPrice: 0,
+      toneClass: 'booking-summary--info',
+    }
+  }
+
+  if (startDateBusyInterval.value) {
+    return {
+      ready: false,
+      title: 'Дата начала недоступна',
+      description: `Этот день входит в занятый интервал. Попробуйте начать аренду с ${formatDate(getBusyIntervalEndDate(startDateBusyInterval.value))}.`,
+      days: 0,
+      totalPrice: 0,
+      toneClass: 'booking-summary--error',
+    }
+  }
+
   if (!bookingForm.startDate || !bookingForm.endDate) {
     return {
       ready: false,
@@ -342,6 +573,17 @@ const bookingState = computed(() => {
     }
   }
 
+  if (selectedBusyInterval.value) {
+    return {
+      ready: false,
+      title: 'Диапазон занят',
+      description: `Выбранный период пересекается с интервалом ${formatBusyInterval(selectedBusyInterval.value)}.`,
+      days: 0,
+      totalPrice: 0,
+      toneClass: 'booking-summary--error',
+    }
+  }
+
   const days = getDaysBetween(bookingForm.startDate, bookingForm.endDate)
 
   return {
@@ -354,12 +596,42 @@ const bookingState = computed(() => {
   }
 })
 
+async function loadAvailability(carIdValue: number, signal?: AbortSignal) {
+  isAvailabilityLoading.value = true
+  availabilityErrorMessage.value = ''
+
+  try {
+    availability.value = await getCarAvailability(
+      carIdValue,
+      {
+        from: today,
+        to: availabilityRangeEnd,
+      },
+      signal,
+    )
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
+
+    availability.value = null
+    availabilityErrorMessage.value =
+      error instanceof Error
+        ? error.message
+        : 'Не удалось загрузить информацию о занятых датах. Попробуйте снова, или войдите в аккаунт, чтобы видеть актуальную доступность при выборе дат.'
+  } finally {
+    isAvailabilityLoading.value = false
+  }
+}
+
 async function loadCar() {
   currentController?.abort()
   currentController = new AbortController()
   isLoading.value = true
   errorMessage.value = ''
   car.value = null
+  availability.value = null
+  availabilityErrorMessage.value = ''
 
   if (carId.value === null) {
     isLoading.value = false
@@ -370,6 +642,7 @@ async function loadCar() {
     car.value = await getCarDetails(carId.value, currentController.signal)
     selectedImageIndex.value = 0
     thumbnailWindowStart.value = 0
+    await loadAvailability(carId.value, currentController.signal)
 
     if (authStore.isAuthenticated) {
       await favoritesStore.ensureLoaded()
@@ -397,12 +670,7 @@ async function handleFavoriteClick() {
   }
 
   if (!authStore.isAuthenticated) {
-    await router.push({
-      name: 'login',
-      query: {
-        redirect: route.fullPath,
-      },
-    })
+    await router.push(loginLink.value)
     return
   }
 
@@ -411,6 +679,124 @@ async function handleFavoriteClick() {
   } catch {
     // The store keeps the latest backend error for views that need it.
   }
+}
+
+async function submitBooking() {
+  if (!car.value || !bookingState.value.ready || isBookingSubmitting.value) {
+    return
+  }
+
+  bookingErrorMessage.value = ''
+  bookingResult.value = ''
+  const startDate = bookingForm.startDate
+  const endDate = bookingForm.endDate
+
+  try {
+    isBookingSubmitting.value = true
+
+    await createBooking(authStore.authorizedRequest, {
+      car_id: car.value.id,
+      start_date: toApiDateTime(startDate),
+      end_date: toApiDateTime(endDate),
+    })
+
+    bookingResult.value =
+      `${carTitle.value} забронирован с ${formatDate(startDate)} по ${formatDate(endDate)}. ` +
+      'Теперь бронь можно отслеживать и отменять в профиле.'
+
+    preserveBookingFeedback.value = true  
+    bookingForm.startDate = ''
+    bookingForm.endDate = ''
+    openCalendar.value = null
+    await loadAvailability(car.value.id)
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      await router.push(loginLink.value)
+      return
+    }
+
+    if (error instanceof ApiError && error.status === 409) {
+      await loadAvailability(car.value.id)
+    }
+
+    bookingErrorMessage.value = getBookingErrorMessage(error, 'Не удалось создать бронирование.')
+  } finally {
+    isBookingSubmitting.value = false
+  }
+}
+
+function toggleCalendar(kind: 'start' | 'end') {
+  if (isAvailabilityLoading.value) {
+    return
+  }
+
+  if (kind === 'end' && !bookingForm.startDate) {
+    return
+  }
+
+  if (openCalendar.value === kind) {
+    openCalendar.value = null
+    return
+  }
+
+  openCalendar.value = kind
+  calendarMonth.value = startOfMonth(
+    kind === 'start' ? bookingForm.startDate || today : bookingForm.endDate || bookingForm.startDate || today,
+  )
+}
+
+function shiftCalendarMonth(step: number) {
+  const monthDate = parseDateOnly(calendarMonth.value)
+  monthDate.setUTCMonth(monthDate.getUTCMonth() + step)
+  calendarMonth.value = monthDate.toISOString().slice(0, 10)
+}
+
+function selectCalendarDate(date: string) {
+  if (isCalendarDateDisabled(date)) {
+    return
+  }
+
+  if (openCalendar.value === 'start') {
+    bookingForm.startDate = date
+
+    if (
+      bookingForm.endDate &&
+      (bookingForm.endDate <= date || findOverlappingInterval(date, bookingForm.endDate, busyIntervals.value))
+    ) {
+      bookingForm.endDate = ''
+    }
+
+    openCalendar.value = 'end'
+    calendarMonth.value = startOfMonth(bookingForm.startDate || today)
+    return
+  }
+
+  bookingForm.endDate = date
+  openCalendar.value = null
+}
+
+function isCalendarDateDisabled(date: string) {
+  if (date < today) {
+    return true
+  }
+
+  if (openCalendar.value === 'start') {
+    return Boolean(findIntervalContainingDate(date, busyIntervals.value))
+  }
+
+  if (openCalendar.value === 'end') {
+    if (!bookingForm.startDate) {
+      return true
+    }
+
+    return date <= bookingForm.startDate || Boolean(findOverlappingInterval(bookingForm.startDate, date, busyIntervals.value))
+  }
+
+  return true
+}
+
+function formatFieldValue(dateString: string, fallback: string) {
+  return dateString ? formatDate(dateString) : fallback
 }
 
 function openLightbox(index: number) {
@@ -458,24 +844,38 @@ function scrollThumbsNext() {
   )
 }
 
-function submitBooking() {
-  if (!car.value || !bookingState.value.ready) {
-    return
-  }
-
-  bookingResult.value =
-    `Заявка-заглушка создана: ${carTitle.value}, ${formatDate(bookingForm.startDate)} - ${formatDate(bookingForm.endDate)}, ` +
-    `${bookingState.value.days} суток, сумма ${formatPrice(bookingState.value.totalPrice)}. Позже сюда можно подключить backend бронирования.`
-}
-
 watch(
   () => route.params.id,
   () => {
     closeLightbox()
+    openCalendar.value = null
     bookingResult.value = ''
+    bookingErrorMessage.value = ''
     bookingForm.startDate = ''
     bookingForm.endDate = ''
     void loadCar()
+  },
+)
+
+watch([() => bookingForm.startDate, () => bookingForm.endDate], () => {
+    if (preserveBookingFeedback.value) {
+    preserveBookingFeedback.value = false
+    return
+    }
+  
+  bookingResult.value = ''
+  bookingErrorMessage.value = ''
+})
+
+watch(
+  () => bookingForm.startDate,
+  (startDate) => {
+    if (
+      bookingForm.endDate &&
+      (!startDate || bookingForm.endDate <= startDate || findOverlappingInterval(startDate, bookingForm.endDate, busyIntervals.value))
+    ) {
+      bookingForm.endDate = ''
+    }
   },
 )
 
@@ -492,6 +892,7 @@ watch(selectedImageIndex, (index) => {
 })
 
 onMounted(() => {
+  calendarMonth.value = startOfMonth(today)
   void loadCar()
 })
 
@@ -508,15 +909,69 @@ function formatDate(dateString: string) {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-  }).format(new Date(`${dateString}T00:00:00`))
+    timeZone: 'UTC',
+  }).format(parseDateOnly(dateString))
+}
+
+function formatBusyInterval(interval: BookingBusyInterval) {
+  const busyUntil = addDays(interval.end_date, -1)
+
+  if (interval.start_date === busyUntil) {
+    return formatDate(interval.start_date)
+  }
+
+  return `${formatDate(interval.start_date)} - ${formatDate(busyUntil)}`
+}
+
+function getBusyIntervalDays(interval: BookingBusyInterval) {
+  return getDaysBetween(interval.start_date, interval.end_date)
+}
+
+function getBusyIntervalEndDate(interval: BookingBusyInterval | null | undefined) {
+  return interval?.end_date || today
+}
+
+function findIntervalContainingDate(dateString: string, intervals: BookingBusyInterval[]) {
+  if (!dateString) {
+    return null
+  }
+
+  return intervals.find((interval) => interval.start_date <= dateString && interval.end_date > dateString) ?? null
+}
+
+function findOverlappingInterval(
+  startDate: string,
+  endDate: string,
+  intervals: BookingBusyInterval[],
+) {
+  if (!startDate || !endDate || endDate <= startDate) {
+    return null
+  }
+
+  return intervals.find((interval) => interval.start_date < endDate && interval.end_date > startDate) ?? null
 }
 
 function getDaysBetween(start: string, end: string) {
-  const startDate = new Date(`${start}T00:00:00`)
-  const endDate = new Date(`${end}T00:00:00`)
+  const startDate = parseDateOnly(start)
+  const endDate = parseDateOnly(end)
   const millisecondsPerDay = 1000 * 60 * 60 * 24
 
   return Math.ceil((endDate.getTime() - startDate.getTime()) / millisecondsPerDay)
+}
+
+function parseDateOnly(dateString: string) {
+  return new Date(`${dateString}T00:00:00.000Z`)
+}
+
+function addDays(dateString: string, days: number) {
+  const date = parseDateOnly(dateString)
+  date.setUTCDate(date.getUTCDate() + days)
+
+  return date.toISOString().slice(0, 10)
+}
+
+function startOfMonth(dateString: string) {
+  return `${dateString.slice(0, 7)}-01`
 }
 
 function getToday() {
@@ -525,6 +980,10 @@ function getToday() {
   const normalized = new Date(now.getTime() - offset * 60 * 1000)
 
   return normalized.toISOString().slice(0, 10)
+}
+
+function toApiDateTime(dateString: string) {
+  return `${dateString}T00:00:00.000Z`
 }
 </script>
 
@@ -574,7 +1033,9 @@ function getToday() {
 .lightbox__close,
 .lightbox__nav,
 .favorite-button,
-.booking-button {
+.booking-button,
+.booking-login-link,
+.booking-result__link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -584,7 +1045,9 @@ function getToday() {
 }
 
 .state-button,
-.not-found__link {
+.not-found__link,
+.booking-login-link,
+.booking-result__link {
   min-height: 48px;
   margin-top: 24px;
   padding: 0 20px;
@@ -814,7 +1277,8 @@ function getToday() {
 .spec-card p,
 .booking-card__top p,
 .booking-note,
-.booking-result p {
+.booking-result p,
+.booking-guest__text {
   margin: 0;
   color: #60707f;
 }
@@ -905,7 +1369,7 @@ function getToday() {
   font-weight: 800;
 }
 
-.booking-field input {
+.booking-field__input {
   min-height: 52px;
   padding: 0 16px;
   border: 1px solid #d6dfe7;
@@ -915,10 +1379,114 @@ function getToday() {
   font: inherit;
 }
 
-.booking-field input:focus {
+.booking-field__input:focus {
   outline: none;
   border-color: #3b63b7;
   box-shadow: 0 0 0 4px rgba(59, 99, 183, 0.12);
+}
+
+.booking-field__input--invalid {
+  border-color: rgba(184, 57, 38, 0.55);
+  background: #fff6f4;
+}
+
+.booking-field--calendar {
+  position: relative;
+}
+
+.booking-field__trigger {
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid #d6dfe7;
+  border-radius: 16px;
+  background: #f8fbfd;
+  color: #18222d;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.booking-field__trigger--placeholder {
+  color: #60707f;
+}
+
+.booking-field__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.booking-calendar {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 5;
+  width: min(320px, 100%);
+  padding: 16px;
+  border: 1px solid rgba(17, 29, 35, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 20px 50px rgba(14, 40, 64, 0.12);
+}
+
+.booking-calendar__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #001944;
+}
+
+.booking-calendar__nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(17, 29, 35, 0.08);
+  border-radius: 12px;
+  background: #f7fbff;
+  color: #163f77;
+  cursor: pointer;
+}
+
+.booking-calendar__weekdays,
+.booking-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.booking-calendar__weekdays {
+  margin-bottom: 8px;
+  color: #60707f;
+  font-size: 12px;
+  text-align: center;
+}
+
+.booking-calendar__day {
+  min-height: 38px;
+  border: 0;
+  border-radius: 12px;
+  background: #eef4f9;
+  color: #18222d;
+  cursor: pointer;
+  font: inherit;
+}
+
+.booking-calendar__day--muted {
+  opacity: 0.42;
+}
+
+.booking-calendar__day--selected {
+  background: #001944;
+  color: #fff;
+}
+
+.booking-calendar__day:disabled {
+  background: #f3f5f8;
+  color: #a4b1c0;
+  cursor: not-allowed;
 }
 
 .booking-summary {
@@ -928,6 +1496,10 @@ function getToday() {
 
 .booking-summary--muted {
   background: #f2f6fb;
+}
+
+.booking-summary--info {
+  background: rgba(22, 63, 119, 0.08);
 }
 
 .booking-summary--success {
@@ -968,6 +1540,82 @@ function getToday() {
   cursor: not-allowed;
 }
 
+.availability-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(17, 29, 35, 0.08);
+  border-radius: 20px;
+  background: #f7fbff;
+}
+
+.availability-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.availability-panel__title {
+  margin: 0;
+  color: #001944;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.availability-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(22, 63, 119, 0.12);
+  color: #163f77;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.availability-panel__note,
+.availability-panel__empty,
+.availability-list__item p,
+.booking-inline-message {
+  margin: 0;
+  color: #60707f;
+  line-height: 1.6;
+}
+
+.availability-panel__note--warning,
+.booking-inline-message--error {
+  color: #9d3928;
+}
+
+.availability-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.availability-list__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.availability-list__item .material-symbols-outlined {
+  color: #163f77;
+}
+
+.availability-list__item strong {
+  color: #001944;
+}
+
 .booking-note {
   display: flex;
   align-items: flex-start;
@@ -975,15 +1623,38 @@ function getToday() {
   line-height: 1.6;
 }
 
+.booking-guest {
+  display: grid;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.booking-login-link {
+  margin-top: 0;
+}
+
 .booking-result {
+  display: grid;
+  gap: 10px;
   padding: 18px;
   border-radius: 20px;
+}
+
+.booking-result--success {
   background: #edf4ff;
 }
 
+.booking-result--error {
+  background: #fff0ee;
+}
+
 .booking-result p {
-  margin-top: 10px;
   line-height: 1.7;
+}
+
+.booking-result__link {
+  width: 100%;
+  margin-top: 4px;
 }
 
 .lightbox {

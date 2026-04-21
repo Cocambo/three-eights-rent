@@ -35,6 +35,11 @@ type GetCarByIDURI struct {
 	ID uint `uri:"id" binding:"required,gt=0"`
 }
 
+type GetCarAvailabilityQuery struct {
+	From string `form:"from" binding:"required"`
+	To   string `form:"to" binding:"required"`
+}
+
 type UploadCarImageForm struct {
 	IsMain    bool `form:"is_main"`
 	SortOrder int  `form:"sort_order" binding:"omitempty,gte=0"`
@@ -86,6 +91,18 @@ type CarDetailsResponse struct {
 	Purpose      string             `json:"purpose"`
 	Description  string             `json:"description"`
 	Images       []CarImageResponse `json:"images"`
+}
+
+type CarAvailabilityIntervalResponse struct {
+	StartDate string `json:"start_date"`
+	EndDate   string `json:"end_date"`
+}
+
+type CarAvailabilityResponse struct {
+	CarID         uint                              `json:"car_id"`
+	From          string                            `json:"from"`
+	To            string                            `json:"to"`
+	BusyIntervals []CarAvailabilityIntervalResponse `json:"busy_intervals"`
 }
 
 type CarsCatalogResponse struct {

@@ -3,6 +3,7 @@ package handler
 import (
 	"car-service/internal/dto"
 	"car-service/internal/service"
+	"time"
 )
 
 func toCarsCatalogResponse(result service.CatalogResult) dto.CarsCatalogResponse {
@@ -65,6 +66,23 @@ func toCarDetailsResponse(result service.CarDetailsResult) dto.CarDetailsRespons
 	}
 }
 
+func toCarAvailabilityResponse(result service.CarAvailabilityResult) dto.CarAvailabilityResponse {
+	intervals := make([]dto.CarAvailabilityIntervalResponse, 0, len(result.BusyIntervals))
+	for _, interval := range result.BusyIntervals {
+		intervals = append(intervals, dto.CarAvailabilityIntervalResponse{
+			StartDate: formatDateOnly(interval.StartDate),
+			EndDate:   formatDateOnly(interval.EndDate),
+		})
+	}
+
+	return dto.CarAvailabilityResponse{
+		CarID:         result.CarID,
+		From:          formatDateOnly(result.From),
+		To:            formatDateOnly(result.To),
+		BusyIntervals: intervals,
+	}
+}
+
 func toUploadedCarImageResponse(result service.UploadedCarImageResult) dto.UploadedCarImageResponse {
 	return dto.UploadedCarImageResponse{
 		ID:          result.ID,
@@ -91,4 +109,42 @@ func toListFavoritesResponse(items []service.FavoriteItem) dto.ListFavoritesResp
 	return dto.ListFavoritesResponse{
 		Items: responseItems,
 	}
+}
+
+func toBookingResponse(item service.BookingRecord) dto.BookingResponse {
+	return dto.BookingResponse{
+		ID:          item.ID,
+		CarID:       item.CarID,
+		StartDate:   item.StartDate,
+		EndDate:     item.EndDate,
+		Status:      item.Status,
+		CreatedAt:   item.CreatedAt,
+		UpdatedAt:   item.UpdatedAt,
+		CancelledAt: item.CancelledAt,
+	}
+}
+
+func toListBookingsResponse(items []service.BookingHistoryItem) dto.ListBookingsResponse {
+	responseItems := make([]dto.BookingHistoryItemResponse, 0, len(items))
+	for _, item := range items {
+		responseItems = append(responseItems, dto.BookingHistoryItemResponse{
+			ID:          item.ID,
+			CarID:       item.CarID,
+			StartDate:   item.StartDate,
+			EndDate:     item.EndDate,
+			Status:      item.Status,
+			CreatedAt:   item.CreatedAt,
+			UpdatedAt:   item.UpdatedAt,
+			CancelledAt: item.CancelledAt,
+			Car:         toCarCatalogItemResponse(item.Car),
+		})
+	}
+
+	return dto.ListBookingsResponse{
+		Items: responseItems,
+	}
+}
+
+func formatDateOnly(value time.Time) string {
+	return value.UTC().Format("2006-01-02")
 }

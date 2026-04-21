@@ -19,6 +19,15 @@ func bindQuery(c *gin.Context, dst any) bool {
 	return true
 }
 
+func bindJSON(c *gin.Context, dst any) bool {
+	if err := c.ShouldBindJSON(dst); err != nil {
+		writeError(c, apperrors.New(apperrors.ErrValidation, formatBindingError(err)))
+		return false
+	}
+
+	return true
+}
+
 func bindURI(c *gin.Context, dst any) bool {
 	if err := c.ShouldBindUri(dst); err != nil {
 		writeError(c, apperrors.New(apperrors.ErrValidation, formatBindingError(err)))
