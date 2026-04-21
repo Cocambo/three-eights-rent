@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <section class="car-page">
     <AppHeader />
 
@@ -409,6 +409,7 @@ const lightboxOpen = ref(false)
 const bookingResult = ref('')
 const bookingErrorMessage = ref('')
 const isBookingSubmitting = ref(false)
+const preserveBookingFeedback = ref(false)
 const visibleThumbCount = 4
 const visibleBusyIntervalsCount = 6
 const today = getToday()
@@ -617,7 +618,7 @@ async function loadAvailability(carIdValue: number, signal?: AbortSignal) {
     availabilityErrorMessage.value =
       error instanceof Error
         ? error.message
-        : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ Р·Р°РЅСЏС‚С‹Рµ РґР°С‚С‹. Р¤РёРЅР°Р»СЊРЅР°СЏ РїСЂРѕРІРµСЂРєР° РІСЃС‘ СЂР°РІРЅРѕ РѕСЃС‚Р°РµС‚СЃСЏ РЅР° СЃРµСЂРІРµСЂРµ.'
+        : 'Не удалось загрузить информацию о занятых датах. Попробуйте снова, или войдите в аккаунт, чтобы видеть актуальную доступность при выборе дат.'
   } finally {
     isAvailabilityLoading.value = false
   }
@@ -703,6 +704,7 @@ async function submitBooking() {
       `${carTitle.value} забронирован с ${formatDate(startDate)} по ${formatDate(endDate)}. ` +
       'Теперь бронь можно отслеживать и отменять в профиле.'
 
+    preserveBookingFeedback.value = true  
     bookingForm.startDate = ''
     bookingForm.endDate = ''
     openCalendar.value = null
@@ -856,6 +858,11 @@ watch(
 )
 
 watch([() => bookingForm.startDate, () => bookingForm.endDate], () => {
+    if (preserveBookingFeedback.value) {
+    preserveBookingFeedback.value = false
+    return
+    }
+  
   bookingResult.value = ''
   bookingErrorMessage.value = ''
 })
