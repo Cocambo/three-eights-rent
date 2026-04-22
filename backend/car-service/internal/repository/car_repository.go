@@ -46,6 +46,7 @@ type CarRepository interface {
 	Count(ctx context.Context, filter CarFilter) (int64, error)
 	GetByID(ctx context.Context, id uint) (domains.Car, error)
 	ExistsByID(ctx context.Context, id uint) (bool, error)
+	ListByIDs(ctx context.Context, ids []uint) ([]domains.Car, error)
 	CreateImage(ctx context.Context, params CreateCarImageParams) (domains.CarImage, error)
 }
 
@@ -152,6 +153,40 @@ func (r *gormCarRepository) ExistsByID(ctx context.Context, id uint) (bool, erro
 	default:
 		return false, mapRepositoryError(err, "car not found")
 	}
+}
+
+func (r *gormCarRepository) ListByIDs(ctx context.Context, ids []uint) ([]domains.Car, error) {
+	if len(ids) == 0 {
+		return []domains.Car{}, nil
+	}
+
+	var rows []carCatalogRow
+
+	err := r.db.WithContext(ctx).
+		Model(&domains.Car{}).
+		Where("cars.id IN ?", ids).
+		Joins(
+			`LEFT JOIN LATERAL (
+				SELECT id, bucket_name, object_key
+				FROM car_images
+				WHERE car_images.car_id = cars.id AND car_images.is_main = ?
+				ORDER BY car_images.sort_order ASC, car_images.id ASC
+				LIMIT 1
+			) AS main_image ON true`,
+			true,
+		).
+		Select(carCatalogSelect()).
+		Find(&rows).Error
+	if err != nil {
+		return nil, mapRepositoryError(err, "cars not found")
+	}
+
+	cars := make([]domains.Car, 0, len(rows))
+	for _, row := range rows {
+		cars = append(cars, row.toDomain())
+	}
+
+	return cars, nil
 }
 
 func (r *gormCarRepository) CreateImage(

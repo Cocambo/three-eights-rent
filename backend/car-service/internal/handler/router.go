@@ -11,11 +11,12 @@ type JWTMiddleware interface {
 }
 
 type Dependencies struct {
-	CarHandler      *CarHandler
-	BookingHandler  *BookingHandler
-	FavoriteHandler *FavoriteHandler
-	JWTMiddleware   JWTMiddleware
-	MinIOAvailable  bool
+	CarHandler            *CarHandler
+	BookingHandler        *BookingHandler
+	FavoriteHandler       *FavoriteHandler
+	RecommendationHandler *RecommendationHandler
+	JWTMiddleware         JWTMiddleware
+	MinIOAvailable        bool
 }
 
 func RegisterRoutes(router *gin.Engine, deps Dependencies) {
@@ -58,5 +59,21 @@ func RegisterRoutes(router *gin.Engine, deps Dependencies) {
 		bookings.POST("", deps.BookingHandler.Create)
 		bookings.DELETE("/:id", deps.BookingHandler.Cancel)
 		bookings.GET("", deps.BookingHandler.List)
+	}
+
+	recommendations := api.Group("/recommendations")
+	if deps.JWTMiddleware != nil {
+		recommendations.Use(deps.JWTMiddleware.JWTAuthMiddleware())
+	}
+	{
+		recommendations.GET("/me", deps.RecommendationHandler.GetMe)
+	}
+
+	internal := router.Group("/internal")
+	if deps.JWTMiddleware != nil {
+		internal.Use(deps.JWTMiddleware.JWTAuthMiddleware())
+	}
+	{
+		internal.POST("/recommendations/rebuild", deps.RecommendationHandler.Rebuild)
 	}
 }

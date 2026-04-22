@@ -145,6 +145,41 @@ func toListBookingsResponse(items []service.BookingHistoryItem) dto.ListBookings
 	}
 }
 
+func toRecommendationsResponse(result service.RecommendationsResult) dto.RecommendationsResponse {
+	items := make([]dto.RecommendationItemResponse, 0, len(result.Items))
+	for _, item := range result.Items {
+		items = append(items, dto.RecommendationItemResponse{
+			ID:           item.ID,
+			Brand:        item.Brand,
+			Model:        item.Model,
+			Year:         item.Year,
+			FuelType:     item.FuelType,
+			Transmission: item.Transmission,
+			BodyType:     item.BodyType,
+			SeatsCount:   item.SeatsCount,
+			PricePerDay:  item.PricePerDay,
+			Purpose:      item.Purpose,
+			MainImageURL: item.MainImageURL,
+			Score:        item.Score,
+		})
+	}
+
+	return dto.RecommendationsResponse{
+		Items: items,
+	}
+}
+
+func toRebuildRecommendationsResponse(
+	result service.RebuildRecommendationsResult,
+) dto.RebuildRecommendationsResponse {
+	return dto.RebuildRecommendationsResponse{
+		InteractionsCount:    result.InteractionsCount,
+		SourceCarsCount:      result.SourceCarsCount,
+		RecommendationsCount: result.RecommendationsCount,
+		RebuiltAt:            result.RebuiltAt,
+	}
+}
+
 func formatDateOnly(value time.Time) string {
 	return value.UTC().Format("2006-01-02")
 }

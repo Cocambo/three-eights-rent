@@ -56,22 +56,32 @@ func run() error {
 	carRepository := repository.NewCarRepository(db)
 	bookingRepository := repository.NewBookingRepository(db)
 	favoriteRepository := repository.NewFavoriteRepository(db)
+	recommendationRepository := repository.NewRecommendationRepository(db)
 	carService := service.NewCarService(carRepository, imageStorage)
 	bookingService := service.NewBookingService(bookingRepository, carRepository, imageStorage)
 	favoriteService := service.NewFavoriteService(favoriteRepository, carRepository, imageStorage)
+	recommendationCalculator := service.NewRecommendationCalculator()
+	recommendationService := service.NewRecommendationService(
+		recommendationRepository,
+		carRepository,
+		imageStorage,
+		recommendationCalculator,
+	)
 	carHandler := handler.NewCarHandler(carService)
 	bookingHandler := handler.NewBookingHandler(bookingService)
 	favoriteHandler := handler.NewFavoriteHandler(favoriteService)
+	recommendationHandler := handler.NewRecommendationHandler(recommendationService)
 	jwtMiddleware := middleware.NewJWTMiddleware(cfg.JWT.AccessSecret)
 
 	router := gin.New()
 	middleware.Setup(router)
 	handler.RegisterRoutes(router, handler.Dependencies{
-		CarHandler:      carHandler,
-		BookingHandler:  bookingHandler,
-		FavoriteHandler: favoriteHandler,
-		JWTMiddleware:   jwtMiddleware,
-		MinIOAvailable:  imageStorage != nil,
+		CarHandler:            carHandler,
+		BookingHandler:        bookingHandler,
+		FavoriteHandler:       favoriteHandler,
+		RecommendationHandler: recommendationHandler,
+		JWTMiddleware:         jwtMiddleware,
+		MinIOAvailable:        imageStorage != nil,
 	})
 
 	if err := router.Run(":" + cfg.Server.Port); err != nil {
