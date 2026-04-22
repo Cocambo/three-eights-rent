@@ -3,6 +3,8 @@
     <AppHeader />
 
     <main>
+      <HomeRecommendationsSection v-if="authStore.isAuthenticated" />
+
       <section class="hero-section">
         <div class="container hero-section__layout">
           <div class="hero-copy">
@@ -130,6 +132,10 @@ import { RouterLink } from 'vue-router'
 
 import AppFooter from '@/components/AppFooter.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import HomeRecommendationsSection from '@/components/HomeRecommendationsSection.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
 </script>
 
 <style scoped>
