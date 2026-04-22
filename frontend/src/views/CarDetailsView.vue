@@ -162,7 +162,7 @@
             </section>
           </div>
 
-          <aside class="booking-card">
+          <aside ref="bookingCardRef" class="booking-card">
             <div class="booking-card__top">
               <p>Стоимость аренды</p>
               <div>
@@ -182,7 +182,7 @@
 
             <template v-if="authStore.isAuthenticated">
               <div class="booking-card__fields">
-                <div class="booking-field booking-field--calendar">
+                <div ref="startBookingFieldRef" class="booking-field booking-field--calendar">
                   <span>Дата начала</span>
                   <button
                     class="booking-field__trigger"
@@ -228,7 +228,7 @@
                   </div>
                 </div>
 
-                <div class="booking-field booking-field--calendar">
+                <div ref="endBookingFieldRef" class="booking-field booking-field--calendar">
                   <span>Дата завершения</span>
                   <button
                     class="booking-field__trigger"
@@ -376,7 +376,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import AppFooter from '@/components/AppFooter.vue'
@@ -410,6 +410,9 @@ const bookingResult = ref('')
 const bookingErrorMessage = ref('')
 const isBookingSubmitting = ref(false)
 const preserveBookingFeedback = ref(false)
+const bookingCardRef = ref<HTMLElement | null>(null)
+const startBookingFieldRef = ref<HTMLElement | null>(null)
+const endBookingFieldRef = ref<HTMLElement | null>(null)
 const visibleThumbCount = 4
 const visibleBusyIntervalsCount = 6
 const today = getToday()
@@ -743,6 +746,7 @@ function toggleCalendar(kind: 'start' | 'end') {
   calendarMonth.value = startOfMonth(
     kind === 'start' ? bookingForm.startDate || today : bookingForm.endDate || bookingForm.startDate || today,
   )
+  void scrollBookingFieldIntoView(kind)
 }
 
 function shiftCalendarMonth(step: number) {
@@ -768,6 +772,7 @@ function selectCalendarDate(date: string) {
 
     openCalendar.value = 'end'
     calendarMonth.value = startOfMonth(bookingForm.startDate || today)
+    void scrollBookingFieldIntoView('end')
     return
   }
 
@@ -984,6 +989,20 @@ function getToday() {
 
 function toApiDateTime(dateString: string) {
   return `${dateString}T00:00:00.000Z`
+}
+
+async function scrollBookingFieldIntoView(kind: 'start' | 'end') {
+  await nextTick()
+
+  const field = kind === 'start' ? startBookingFieldRef.value : endBookingFieldRef.value
+  if (!field) {
+    return
+  }
+
+  field.scrollIntoView({
+    block: 'nearest',
+    behavior: 'smooth',
+  })
 }
 </script>
 
@@ -1336,8 +1355,27 @@ function toApiDateTime(dateString: string) {
   top: 92px;
   display: grid;
   gap: 18px;
+  max-height: calc(100vh - 116px);
   padding: 28px;
   border-radius: 30px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.booking-card::-webkit-scrollbar {
+  width: 10px;
+}
+
+.booking-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.booking-card::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(22, 63, 119, 0.22);
+  background-clip: padding-box;
 }
 
 .booking-card__top strong {
@@ -1704,6 +1742,8 @@ function toApiDateTime(dateString: string) {
 
   .booking-card {
     position: static;
+    max-height: none;
+    overflow: visible;
   }
 }
 
