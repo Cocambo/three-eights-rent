@@ -25,6 +25,8 @@ func Register(engine *gin.Engine, cfg *config.Config) {
 	carProxy := proxy.NewReverseProxy(carServiceURL, "/api/v1/cars", "/api/v1/cars")
 	favoritesProxy := proxy.NewReverseProxy(carServiceURL, "/api/v1/favorites", "/api/v1/favorites")
 	bookingsProxy := proxy.NewReverseProxy(carServiceURL, "/api/v1/bookings", "/api/v1/bookings")
+	recommendationsProxy := proxy.NewReverseProxy(carServiceURL, "/api/v1/recommendations", "/api/v1/recommendations")
+	internalRecommendationsProxy := proxy.NewReverseProxy(carServiceURL, "/internal/recommendations", "/internal/recommendations")
 	jwtMiddleware := middleware.JWTMiddleware(cfg.JWTAccessSecret)
 	stripIdentityHeaders := middleware.StripIdentityHeaders()
 
@@ -75,5 +77,17 @@ func Register(engine *gin.Engine, cfg *config.Config) {
 		protectedBookings.POST("", bookingsProxy)
 		protectedBookings.DELETE("/:id", bookingsProxy)
 		protectedBookings.GET("", bookingsProxy)
+	}
+
+	protectedRecommendations := engine.Group("/api/v1/recommendations")
+	protectedRecommendations.Use(stripIdentityHeaders, jwtMiddleware)
+	{
+		protectedRecommendations.GET("/me", recommendationsProxy)
+	}
+
+	protectedInternalRecommendations := engine.Group("/internal/recommendations")
+	protectedInternalRecommendations.Use(stripIdentityHeaders, jwtMiddleware)
+	{
+		protectedInternalRecommendations.POST("/rebuild", internalRecommendationsProxy)
 	}
 }
